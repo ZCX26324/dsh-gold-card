@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "title": {
+    "en": "DSH Gold Card",
+    "zh": "DSH 实时金价面板"
+  },
+  "description": {
+    "en": "Sidebar gold price panel for DeepSeek Harness: Shanghai Gold Exchange Au99.99, XAU/USD, ICBC 和 CCB savings gold quotes with cross-verification.",
+    "zh": "DSH 侧边栏「黄金实时价格」面板：上金所 Au99.99、国际金价 XAU/USD、工行积存金/如意金、建行积存金的实时报价、溢价与交叉校验。"
+  },
+  "metadata": {
+    "categories": {
+      "tools": {
+        "title": {
+          "en": "Tools",
+          "zh": "工具"
+        }
+      },
+      "finance": {
+        "title": {
+          "en": "Finance",
+          "zh": "金融行情"
+        }
+      }
+    },
+    "labels": {
+      "sidebar": {
+        "title": {
+          "en": "Sidebar",
+          "zh": "侧边栏"
+        }
+      },
+      "price": {
+        "title": {
+          "en": "Live price",
+          "zh": "实时价格"
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-gold-card",
+      "title": {
+        "en": "Gold Card",
+        "zh": "黄金实时价格"
+      },
+      "description": {
+        "en": "DSH 实时金价面板插件：左侧边栏「黄金实时价格」入口，卡片展示上金所 Au99.99、国际金价 XAU/USD、工商银行积存金/如意金、建设银行积存金的实时报价、涨跌幅、溢价与交叉校验。",
+        "zh": "DSH 实时金价面板插件：左侧边栏「黄金实时价格」入口，卡片展示上金所 Au99.99、国际金价 XAU/USD、工商银行积存金/如意金、建设银行积存金的实时报价、涨跌幅、溢价与交叉校验。"
+      },
+      "author": "ZCX26324",
+      "homepage": "https://github.com/ZCX26324/dsh-gold-card#readme",
+      "repository": {
+        "url": "https://github.com/ZCX26324/dsh-gold-card"
+      },
+      "metadata": {
+        "category": "finance",
+        "labels": [
+          "sidebar",
+          "price"
+        ]
+      },
+      "versions": [
+        {
+          "version": "1.7.0",
+          "publishTimestamp": 1794041098,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/ZCX26324/dsh-gold-card",
+            "commit": "9cb23234fe86d93ffa93c6996349098445a6d457"
+          },
+          "engines": {
+            "dsh": ">=0.2.0"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -90,6 +90,24 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
   重启一次 DSH 即可（桌面壳在启动时取 index 注入表快照）。
 - 面板资源每次请求都从磁盘读（`cache-control: no-store`），改面板只需刷新页面。
 
+### 方式三：从 DSH 插件市场安装
+
+仓库自带一份 [插件市场索引](market/index.json)（DSH 索引格式 1）。在 DSH 里：
+
+1. 侧边栏 **设置 → 插件 → 发现（Discover） → 索引源（Index sources） → 添加**
+2. 粘贴：
+
+   ```text
+   https://raw.githubusercontent.com/ZCX26324/dsh-gold-card/main/market/index.json
+   ```
+
+3. 「发现」页就会出现「黄金实时价格」，点**安装**即可。
+
+索引把版本固定在某个 commit 上（`source.commit`），所以市场里看到的版本和源码一致。
+新增版本时用 `node tools/market-index.cjs --commit <40 位 SHA>` 重新生成并校验。
+
+> DSH 自带的「发现」页默认没有任何索引源，需要先添加；这是官方设计（索引源由用户配置）。
+
 ## 验证
 
 ```bash
@@ -184,6 +202,10 @@ test/
 tools/
   asar-probe.cjs   读 app.asar 的排查工具（list / grep / cat），维护时查 DSH 内部 API 用
   preview.cjs      离线 UI 预览：vm 跑 panel.js + panel.css 生成同构 HTML，支持 --live 抓真实行情
+  market-index.cjs 生成 / 校验插件市场索引（用官方 @deepseek-ai/dsh-plugin-market-index 校验）
+market/
+  index.json       插件市场索引（DSH 索引格式 1），在「发现 → 索引源」里添加即可安装
+docs/images/       面板截图（README 用）
 CONTRACT.md      Host / 数据层 / 前端三方接口契约
 ```
 

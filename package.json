@@ -26,6 +26,7 @@
     "assets",
     "test",
     "docs/images",
+    "market",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
