@@ -1,0 +1,12 @@
+# 依赖与构建产物
+node_modules/
+*.log
+
+# 离线 UI 预览产物（tools/preview.cjs 生成，含无头浏览器 profile，体积巨大）
+.preview/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

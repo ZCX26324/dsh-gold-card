@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  offline:
+    name: 离线测试（Node ${{ matrix.node }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 代码语法检查
+        run: |
+          for f in lib/*.cjs assets/panel.js test/*.cjs tools/*.cjs; do node --check "$f"; done
+      - name: Host 路由 / index 注入（mock ctx，离线）
+        run: node test/apply-smoke.cjs
+      - name: 面板 DOM 渲染（DOM stub，离线）
+        run: node test/panel-dom.cjs
+      - name: 上金所分时解析单测（离线）
+        run: node test/sge-parse.cjs

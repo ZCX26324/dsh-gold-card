@@ -1,0 +1,49 @@
+{
+  "name": "dsh-gold-card",
+  "version": "1.7.0",
+  "description": "DSH 实时金价面板插件：左侧边栏「黄金实时价格」入口，卡片展示上金所 Au99.99、国际金价 XAU/USD、工商银行积存金/如意金、建设银行积存金的实时报价、涨跌幅、溢价与交叉校验。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "gold",
+    "price",
+    "quote",
+    "sidebar"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZCX26324/dsh-gold-card.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ZCX26324/dsh-gold-card/issues"
+  },
+  "homepage": "https://github.com/ZCX26324/dsh-gold-card#readme",
+  "type": "commonjs",
+  "main": "lib/index.cjs",
+  "files": [
+    "lib",
+    "assets",
+    "test",
+    "docs/images",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/apply-smoke.cjs && node test/panel-dom.cjs && node test/sge-parse.cjs && node test/smoke.cjs",
+    "test:apply": "node test/apply-smoke.cjs",
+    "test:panel": "node test/panel-dom.cjs",
+    "test:parse": "node test/sge-parse.cjs",
+    "test:sources": "node test/smoke.cjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

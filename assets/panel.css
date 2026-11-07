@@ -1,0 +1,880 @@
+/* ===========================================================================
+ * dsh-gold-card —— DSH 左侧边栏「黄金实时价格」入口 + 四卡片面板样式
+ *
+ * 约定：
+ *   1. 只吃 DSH 主题变量（--dsw-* / --ds-* / --dsh-*），亮色/暗色自动跟随
+ *      （主题在 body[data-ds-dark-theme] 上重映射 --dsw-static-*，别名 var() 会自动生效）。
+ *   2. 所有选择器要么以 #dsh-gold- 开头，要么以 .dsh-gold- 开头，零全局污染。
+ *   3. 不依赖 asar 内的哈希类名（.mP3x-q_* / .wtg9ga_* 等跨版本会变），
+ *      形状/尺寸照抄 DSH 原生导航行（36px 高、12px 圆角、6px 图标文字间距）。
+ *
+ * 变量出处：dsh-client-ui-theme（别名/静态色）、dsh-client-ui-layout（frame 尺寸）、
+ *           dsh-client-ui-sidebar（SidebarRoot.module.css 的导航行形态）。
+ * ========================================================================= */
+
+/* 金色点缀（取自主题静态色板，暗色下同样可读） */
+#dsh-gold-nav-host,
+#dsh-gold-rail-host,
+#dsh-gold-card-root {
+  --dsh-gold-gold: var(--dsw-static-amber-500, #f59e0b);
+  --dsh-gold-gold-soft: color-mix(in srgb, var(--dsh-gold-gold) 14%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * 1. 侧边栏入口
+ *
+ * 入口节点直接复用原生面板行（插件 / 自动化任务 / 更多）的 CSS Module 类名，
+ * 由 JS 在运行时从「自动化任务」那一行现取，因此尺寸、内边距、圆角、hover、
+ * focus、折叠轨道形态全部与原生行一致。这里只补「并入 nav 布局」所需的几条，
+ * 不重复声明原生样式，避免与 DSH 主题抢覆盖。
+ * ------------------------------------------------------------------------- */
+
+#dsh-gold-nav-host {
+  display: flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* 图标尺寸对齐原生面板行（宽 16；折叠轨道 18），只给图标上金色 */
+#dsh-gold-nav-host .dsh-gold-nav-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsh-gold-gold);
+}
+
+#dsh-gold-nav-host .dsh-gold-nav-glyph > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+#dsh-gold-nav-host .dsh-gold-nav-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 兜底形态：拿不到原生面板行类名（DSH 结构变化）时，自己画一行，避免裸按钮 */
+#dsh-gold-nav-host[data-native="0"] {
+  gap: var(--dsh-sidebar-label-gap, 6px);
+  min-height: 36px;
+  margin: 0;
+  padding: 7px calc(var(--dsh-sidebar-row-padding, 12px) - var(--dsh-sidebar-paint-inset, 3px));
+  border: 0;
+  border-inline: var(--dsh-sidebar-paint-inset, 3px) solid transparent;
+  border-radius: var(--dsw-radius-md, 12px);
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+#dsh-gold-nav-host[data-native="0"]:hover {
+  background-color: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+}
+
+#dsh-gold-nav-host[data-native="0"]:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
+  outline-offset: -2px;
+}
+
+/* 折叠成 56px 轨道：只留图标（宽度继续交给原生行类名，避免覆盖轨道态的 36px 尺寸） */
+#dsh-gold-nav-host[data-compact="1"] {
+  justify-content: center;
+}
+
+#dsh-gold-nav-host[data-compact="1"] .dsh-gold-nav-title {
+  display: none;
+}
+
+#dsh-gold-nav-host[data-compact="1"] .dsh-gold-nav-glyph {
+  width: 18px;
+  height: 18px;
+}
+
+#dsh-gold-nav-host[data-compact="1"] .dsh-gold-nav-glyph > svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 涨红跌绿（A 股习惯） */
+.dsh-gold-up {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+}
+
+.dsh-gold-down {
+  color: var(--dsw-alias-state-success-primary, #12a150);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. 退化轨道按钮（侧边栏被完全收起 / 挂不上侧边栏时才会出现）
+ * ------------------------------------------------------------------------- */
+
+#dsh-gold-rail-host {
+  position: fixed;
+  left: 10px;
+  bottom: 12px;
+  z-index: 900;
+}
+
+.dsh-gold-rail-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l3, rgba(0, 0, 0, 0.12));
+  border-radius: var(--dsw-radius-md, 12px);
+  background: var(--dsw-alias-button-elevated-fill, #ffffff);
+  box-shadow: var(--dsw-shadow-lv2, 0 2px 10px rgba(0, 0, 0, 0.08));
+  color: var(--dsh-gold-gold);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.dsh-gold-rail-btn:hover {
+  background: var(--dsw-alias-button-floating-hover, #f2f3f5);
+}
+
+.dsh-gold-rail-btn:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
+  outline-offset: -2px;
+}
+
+.dsh-gold-rail-btn > svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.dsh-gold-rail-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dsh-gold-gold);
+  opacity: 0;
+}
+
+.dsh-gold-rail-host[data-open="1"] .dsh-gold-rail-dot {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. 面板外壳：贴左侧边栏右缘展开（固定定位，挂在 body 上，不受 frame overflow 影响）
+ * ------------------------------------------------------------------------- */
+
+#dsh-gold-card-root {
+  position: fixed;
+  top: 8px;
+  bottom: 8px;
+  left: 296px;
+  width: 360px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 0 var(--dsw-radius-lg, 16px) var(--dsw-radius-lg, 16px) 0;
+  /* 与 DSH 弹层同款表面：菜单底色 + 背景模糊 + prominent 高度阴影
+     （见 ui-chat 锚定面板 .xXe6ja_panel / ui-conversation 弹层） */
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-overlay, #ffffff));
+  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
+  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  box-shadow: var(--dsw-elevation-prominent, 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  /* 滚动条跟 DSH 一致 */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2, rgba(0, 0, 0, 0.16));
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2, rgba(0, 0, 0, 0.26));
+}
+
+#dsh-gold-card-root[data-open="0"] {
+  display: none;
+}
+
+/* 窄视口 / 浮层模式：四角全圆 */
+#dsh-gold-card-root[data-sheet="1"] {
+  border-radius: var(--dsw-radius-lg, 16px);
+}
+
+#dsh-gold-card-root[data-open="1"] {
+  animation: dsh-gold-panel-in var(--ds-transition-duration-fast, 0.1s) var(--ds-ease-in-out, ease);
+}
+
+/* ---- 头部 ---- */
+
+.dsh-gold-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 8px 16px;
+}
+
+.dsh-gold-panel-title {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.dsh-gold-panel-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsh-gold-gold);
+}
+
+.dsh-gold-panel-glyph > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.dsh-gold-panel-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.dsh-gold-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  cursor: pointer;
+}
+
+.dsh-gold-iconbtn > svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.dsh-gold-iconbtn:hover {
+  background-color: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  color: var(--dsw-alias-label-primary, #1f2329);
+}
+
+.dsh-gold-iconbtn:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4d6bfe));
+  outline-offset: -2px;
+}
+
+.dsh-gold-iconbtn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dsh-gold-iconbtn[data-busy="1"] > svg {
+  animation: dsh-gold-spin 0.9s linear infinite;
+}
+
+/* ---- 更新信息条 ---- */
+
+.dsh-gold-panel-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px 8px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-panel-meta > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---- 提示条（刷新失败 / 数据滞后等） ---- */
+
+.dsh-gold-alert-slot {
+  flex: none;
+}
+
+.dsh-gold-alert-slot:empty {
+  display: none;
+}
+
+.dsh-gold-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 12px 8px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm, 8px);
+  font-size: 11px;
+  line-height: 16px;
+  word-break: break-word;
+}
+
+.dsh-gold-alert-error {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ec1313) 10%, transparent);
+}
+
+.dsh-gold-alert-warn {
+  color: var(--dsw-alias-state-warn-label, #b26a00);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 14%, transparent);
+}
+
+.dsh-gold-alert-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dsh-gold-linkbtn {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- 卡片滚动区 ---- */
+
+.dsh-gold-panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 4px 8px 12px 16px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-scrollbar-thumb, rgba(0, 0, 0, 0.18)) transparent;
+}
+
+/* 细滚动条：不抢视觉，但明确「下面还有卡片」 */
+.dsh-gold-panel-body::-webkit-scrollbar {
+  width: 9px;
+}
+
+.dsh-gold-panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dsh-gold-panel-body::-webkit-scrollbar-thumb {
+  border: 2.5px solid transparent;
+  border-radius: 999px;
+  background: var(--dsw-scrollbar-thumb, rgba(0, 0, 0, 0.18));
+  background-clip: padding-box;
+}
+
+.dsh-gold-panel-body::-webkit-scrollbar-thumb:hover {
+  background: var(--dsw-scrollbar-thumb-hover, rgba(0, 0, 0, 0.3));
+  background-clip: padding-box;
+}
+
+.dsh-gold-empty {
+  padding: 18px 8px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 骨架屏（首次加载） */
+.dsh-gold-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dsh-gold-skeleton-row {
+  height: 56px;
+  border-radius: var(--dsw-radius-md, 12px);
+  background: var(--dsw-alias-bg-skeleton, rgba(0, 0, 0, 0.04));
+  animation: dsh-gold-pulse 1.4s ease-in-out infinite;
+}
+
+.dsh-gold-skeleton-row:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.dsh-gold-skeleton-row:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.dsh-gold-skeleton-row:nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. 卡片
+ * ------------------------------------------------------------------------- */
+
+.dsh-gold-card {
+  position: relative;
+  flex: none;
+  padding: 11px 13px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.dsh-gold-card:hover {
+  border-color: var(--dsw-alias-border-l3, rgba(0, 0, 0, 0.14));
+}
+
+/* 校验等级只做一条 2px 左侧色带：有差异/陈旧才亮，正常态不喧宾夺主 */
+.dsh-gold-card::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  bottom: 13px;
+  left: 0;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: transparent;
+}
+
+.dsh-gold-card[data-level="differ"]::before {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 70%, transparent);
+}
+
+.dsh-gold-card[data-level="stale"]::before {
+  background: var(--dsw-alias-state-warn-primary, #f59e0b);
+}
+
+.dsh-gold-card[data-level="single"]::before {
+  background: var(--dsw-alias-border-l3, rgba(0, 0, 0, 0.12));
+}
+
+.dsh-gold-card[data-ok="false"] {
+  border-color: color-mix(
+    in srgb,
+    var(--dsw-alias-state-error-primary, #ec1313) 32%,
+    var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08))
+  );
+}
+
+.dsh-gold-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.dsh-gold-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---- 主价格区（hero）+ 涨跌胶囊 ---- */
+
+.dsh-gold-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 5px 0 9px;
+}
+
+.dsh-gold-hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dsh-gold-hero-label {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10.5px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+}
+
+.dsh-gold-hero-line {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dsh-gold-hero-value {
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-hero-unit {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.dsh-gold-change {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-skeleton, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dsh-gold-change.dsh-gold-up {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ec1313) 10%, transparent);
+}
+
+.dsh-gold-change.dsh-gold-down {
+  color: var(--dsw-alias-state-success-primary, #12a150);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #12a150) 12%, transparent);
+}
+
+.dsh-gold-badge {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 15px;
+  font-weight: 400;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dsh-gold-badge-ok {
+  color: var(--dsw-alias-state-success-primary, #12a150);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #12a150) 11%, transparent);
+}
+
+.dsh-gold-badge-info {
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 6%, transparent);
+}
+
+.dsh-gold-badge-differ {
+  color: var(--dsw-alias-state-warn-label, #b26a00);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 14%, transparent);
+}
+
+.dsh-gold-badge-single {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  background: var(--dsw-alias-bg-skeleton, rgba(0, 0, 0, 0.04));
+}
+
+.dsh-gold-badge-warn {
+  color: var(--dsw-alias-state-warn-label, #b26a00);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 16%, transparent);
+}
+
+.dsh-gold-badge-error {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ec1313) 12%, transparent);
+}
+
+/* ---- 统计网格（主价格之外的字段） ---- */
+
+.dsh-gold-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 7px 10px;
+  margin-top: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 3%, transparent);
+}
+
+/* 只有一个剩余字段时（工行如意金：积存价 + 赎回价）不要留一大块空格 */
+.dsh-gold-fields-single {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dsh-gold-fields-single .dsh-gold-field {
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.dsh-gold-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dsh-gold-field-label {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10.5px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.dsh-gold-field-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---- 分组（工行两个产品） ---- */
+
+.dsh-gold-group + .dsh-gold-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+}
+
+.dsh-gold-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.dsh-gold-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 分组内的主价格比卡片级小一号 */
+.dsh-gold-group .dsh-gold-hero {
+  margin: 4px 0 7px;
+}
+
+.dsh-gold-group .dsh-gold-hero-value {
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.dsh-gold-group .dsh-gold-fields {
+  padding: 7px 9px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary, #1f2329) 2%, transparent);
+}
+
+/* ---- 溢价 ---- */
+
+.dsh-gold-premium {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 0.5px dashed var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10.5px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-premium-value {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-skeleton, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-weight: 500;
+}
+
+.dsh-gold-premium-band {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+}
+
+.dsh-gold-premium[data-ok="false"] {
+  color: var(--dsw-alias-state-warn-label, #b26a00);
+}
+
+.dsh-gold-premium[data-ok="false"] .dsh-gold-premium-band {
+  color: inherit;
+}
+
+.dsh-gold-premium[data-ok="false"] .dsh-gold-premium-value {
+  color: var(--dsw-alias-state-warn-label, #b26a00);
+}
+
+.dsh-gold-premium-note {
+  flex-basis: 100%;
+}
+
+/* ---- 说明行（非实时报价 / 缓存回退） ---- */
+
+.dsh-gold-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 7px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10.5px;
+  line-height: 15px;
+  word-break: break-word;
+}
+
+.dsh-gold-note-warn {
+  color: var(--dsw-alias-state-warn-label, #b26a00);
+}
+
+/* ---- 错误态 ---- */
+
+.dsh-gold-error-text {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-word;
+}
+
+/* ---- 卡片脚注：数据源 + 源自带时间戳 ---- */
+
+.dsh-gold-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-card-foot > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. 底部状态
+ * ------------------------------------------------------------------------- */
+
+.dsh-gold-panel-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-panel-foot > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. 动效（尊重 prefers-reduced-motion）
+ * ------------------------------------------------------------------------- */
+
+@keyframes dsh-gold-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes dsh-gold-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dsh-gold-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #dsh-gold-card-root[data-open="1"],
+  .dsh-gold-iconbtn[data-busy="1"] > svg,
+  .dsh-gold-skeleton-row {
+    animation: none;
+  }
+}
