@@ -21,6 +21,106 @@ const vm = require('node:vm')
 const ROOT = path.resolve(__dirname, '..')
 const OUT_DIR = path.join(ROOT, '.preview')
 const DATA_FILE = path.join(OUT_DIR, 'payload.json')
+const EXTRAS_FILE = path.join(OUT_DIR, 'extras.json')
+
+// 离线预览用的走势 / 要闻数据（形状与 /dsh-gold/api/extras 一致）
+function mockExtras() {
+  const monthCloses = [
+    ['2026-09-30', 907.32],
+    ['2026-10-09', 904.48],
+    ['2026-10-12', 898.0],
+    ['2026-10-13', 901.2],
+    ['2026-10-14', 896.4],
+    ['2026-10-15', 892.1],
+    ['2026-10-16', 895.3],
+    ['2026-10-19', 888.0],
+    ['2026-10-20', 884.2],
+    ['2026-10-21', 880.6],
+    ['2026-10-22', 872.4],
+    ['2026-10-23', 864.0],
+    ['2026-10-26', 830.0],
+    ['2026-10-27', 832.2],
+    ['2026-10-28', 835.4],
+    ['2026-10-29', 865.26],
+    ['2026-10-30', 854.76],
+    ['2026-11-02', 836.08],
+    ['2026-11-03', 840.01],
+    ['2026-11-04', 863.79],
+    ['2026-11-05', 884.09],
+    ['2026-11-06', 868.57],
+  ]
+  const range = (rows, label, note) => {
+    const first = rows[0]
+    const last = rows[rows.length - 1]
+    const value = Math.round((last[1] - first[1]) * 100) / 100
+    return {
+      label: label,
+      points: rows.map((r) => ({ date: r[0].slice(5), close: r[1] })),
+      change: { value: value, pct: Math.round((value / first[1]) * 10000) / 100 },
+      fromDate: first[0],
+      toDate: last[0],
+      note: note,
+    }
+  }
+  const weekRows = monthCloses.slice(-5)
+  return {
+    build: 'preview',
+    fetchedAt: new Date().toISOString(),
+    chart: {
+      ok: true,
+      stale: false,
+      fallback: true,
+      error: null,
+      symbol: 'Au99.99',
+      unit: '元/克',
+      source: '上海黄金交易所日行情',
+      updatedAt: new Date().toISOString(),
+      bars: monthCloses.length,
+      ranges: {
+        week: range(weekRows, '本周', null),
+        month: range(monthCloses, '本月', '本月交易日不足，显示近 22 个交易日'),
+      },
+    },
+    news: {
+      ok: true,
+      stale: false,
+      error: null,
+      updatedAt: new Date().toISOString(),
+      items: [
+        {
+          id: 'pv-nbs-01',
+          title: '2026年10月下旬流通领域重要生产资料市场价格变动情况',
+          url: 'https://www.stats.gov.cn/sj/zxfb/202611/t20261103_1965738.html',
+          source: 'nbs',
+          sourceName: '国家统计局',
+          tier: 3,
+          category: 'macro',
+          publishedAt: '2026-11-05T01:30:00.000Z',
+        },
+        {
+          id: 'pv-pbc-01',
+          title: '中国人民银行决定上调金融机构外汇存款准备金率',
+          url: 'https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/2026110510330636555/index.html',
+          source: 'pbc',
+          sourceName: '中国人民银行',
+          tier: 3,
+          category: 'policy',
+          publishedAt: '2026-11-05T09:00:00.000Z',
+        },
+        {
+          id: 'pv-sina-01',
+          title: '国际金价小幅回落，市场关注美联储后续政策路径',
+          url: 'https://finance.sina.com.cn/money/nmetal/hjzx/2026-11-07/doc-inline.shtml',
+          source: 'sina',
+          sourceName: '新浪财经',
+          tier: 1,
+          category: 'gold',
+          publishedAt: '2026-11-07T01:20:00.000Z',
+        },
+      ],
+    },
+  }
+}
 
 function readPanelApi() {
   const code = fs.readFileSync(path.join(ROOT, 'assets', 'panel.js'), 'utf8')
@@ -41,6 +141,8 @@ function readPanelApi() {
     navigator: { userAgent: 'preview' },
     location: { href: 'preview://', protocol: 'preview:' },
     encodeURIComponent: encodeURIComponent,
+    URL: URL,
+    URLSearchParams: URLSearchParams,
     JSON, Math, Date, Number, String, Error, Promise, isFinite, parseFloat, parseInt,
   }
   sandbox.globalThis = sandbox
@@ -70,14 +172,22 @@ function panelHtml(api, payload, opts) {
   const total = (payload && payload.cards && Object.keys(payload.cards).length) || 4
   const metaRight = (payload ? api.okCount(payload) : 0) + '/' + total + ' 源正常'
   const base = payload && typeof payload.baseAu9999 === 'number' ? api.fmtNum(payload.baseAu9999) : '—'
+  const extrasState = opts.extras ? { status: 'ok', data: opts.extras, error: null, at: 0 } : null
+  const side = extrasState
+    ? '<div class="dsh-gold-col-side" aria-label="走势与要闻">' +
+      api.chartCardHtml(extrasState) +
+      api.newsCardHtml(extrasState) +
+      '</div>'
+    : ''
   return `
-  <div id="dsh-gold-card-root" class="dsh-gold-panel" data-open="1" role="dialog" aria-label="黄金实时价格" aria-modal="false">
+  <div id="dsh-gold-card-root" class="dsh-gold-panel" data-open="1" data-extras="1" role="dialog" aria-label="黄金实时价格" aria-modal="false">
     <div class="dsh-gold-panel-head">
       <div class="dsh-gold-panel-title">
         <span class="dsh-gold-panel-glyph" aria-hidden="true">${opts.heroIcon}</span>
         <span class="dsh-gold-panel-title-text">黄金实时价格</span>
       </div>
       <div class="dsh-gold-panel-actions">
+        <button type="button" class="dsh-gold-iconbtn dsh-gold-extras-btn" data-dsh-gold-action="extras" aria-pressed="true" title="显示/隐藏走势与要闻" aria-label="显示/隐藏走势与要闻">${opts.iconExtras}</button>
         <button type="button" class="dsh-gold-iconbtn" title="刷新" aria-label="刷新行情">${opts.iconRefresh}</button>
         <button type="button" class="dsh-gold-iconbtn" title="关闭" aria-label="关闭面板">${opts.iconClose}</button>
       </div>
@@ -87,7 +197,9 @@ function panelHtml(api, payload, opts) {
       <span class="dsh-gold-panel-meta-right">${api.esc(metaRight)}</span>
     </div>
     <div class="dsh-gold-alert-slot">${note}</div>
-    <div class="dsh-gold-panel-body" role="region" aria-label="金价卡片">${cards}</div>
+    <div class="dsh-gold-panel-body" role="region" aria-label="金价卡片">
+      <div class="dsh-gold-layout${side ? ' dsh-gold-layout-wide' : ''}"><div class="dsh-gold-col-main">${cards}</div>${side}</div>
+    </div>
     <div class="dsh-gold-panel-foot">
       <span class="dsh-gold-panel-foot-left">Au99.99 基准 ${api.esc(base)} 元/克</span>
       <span class="dsh-gold-panel-foot-right">每 ${refreshLabel(payload && payload.refreshMs)}自动刷新</span>
@@ -183,7 +295,7 @@ body{background:var(--mock-app-bg);color:var(--mock-text);
 .mock-content{padding:28px 32px;display:flex;flex-direction:column;gap:14px;}
 .mock-line{height:12px;border-radius:6px;background:var(--mock-hover);}
 .w80{width:80%;} .w92{width:92%;} .w60{width:60%;} .w88{width:88%;} .w45{width:45%;}
-#dsh-gold-card-root{left:260px !important;width:392px !important;top:12px !important;bottom:12px !important;}
+#dsh-gold-card-root{left:260px !important;width:780px !important;top:12px !important;bottom:12px !important;}
 /* 截图用：关掉入场动画，避免无头浏览器在淡入过程中截到半透明画面 */
 *,*::before,*::after{animation:none !important;transition:none !important;}
 #dsh-gold-card-root{opacity:1 !important;transform:none !important;}
@@ -193,7 +305,7 @@ function themeVars(dark) {
   return dark ? THEME_DARK : THEME_LIGHT
 }
 
-function page(api, payload, dark, icons) {
+function page(api, payload, dark, icons, extras) {
   const css = fs.readFileSync(path.join(ROOT, 'assets', 'panel.css'), 'utf8')
   return `<!doctype html><html lang="zh-CN"${dark ? ' data-dark="1"' : ''}><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -201,7 +313,7 @@ function page(api, payload, dark, icons) {
 <style>${themeVars(dark)}${MOCK_CSS}${css}</style>
 </head><body>
 ${MOCK_SIDEBAR}
-${panelHtml(api, payload, icons)}
+${panelHtml(api, payload, Object.assign({ extras: extras }, icons))}
 </body></html>`
 }
 
@@ -224,9 +336,39 @@ async function loadPayload(argv) {
   return payload
 }
 
+async function loadExtras(argv) {
+  const live = argv.includes('--live')
+  if (!live) {
+    try {
+      return JSON.parse(fs.readFileSync(EXTRAS_FILE, 'utf8'))
+    } catch (err) { /* 没有缓存就用内置 mock */ }
+    return mockExtras()
+  }
+  try {
+    console.log('抓取走势与要闻…')
+    const { fetchChart } = require('../lib/market.cjs')
+    const { fetchNews } = require('../lib/news.cjs')
+    const os = require('node:os')
+    const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+    const [chart, news] = await Promise.all([
+      fetchChart(),
+      fetchNews({ dshHome: dshHome }),
+    ])
+    const extras = { build: 'preview', fetchedAt: new Date().toISOString(), chart: chart, news: news }
+    fs.mkdirSync(OUT_DIR, { recursive: true })
+    fs.writeFileSync(EXTRAS_FILE, JSON.stringify(extras, null, 2))
+    return extras
+  } catch (err) {
+    console.warn('实时抓取失败，改用内置 mock：' + (err && err.message ? err.message : err))
+    return mockExtras()
+  }
+}
+
 ;(async () => {
+  const argv = process.argv.slice(2)
   const api = readPanelApi()
-  const payload = await loadPayload(process.argv.slice(2))
+  const payload = await loadPayload(argv)
+  const extras = await loadExtras(argv)
   const icons = {
     // 与 panel.js 里的 GOLD_ICON / ICON_REFRESH / ICON_CLOSE 同形
     heroIcon:
@@ -235,11 +377,13 @@ async function loadPayload(argv) {
       '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.1 8.4a5.1 5.1 0 1 1-1.7-3.9" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><path d="M13.3 3.1v2.6h-2.6" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     iconClose:
       '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.6 4.6 11.4 11.4M11.4 4.6 4.6 11.4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>',
+    iconExtras:
+      '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.6 11.7 6 8.1l2.4 2.1 4.9-5.3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.6 4.9h2.7v2.7" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   }
   fs.mkdirSync(OUT_DIR, { recursive: true })
   for (const dark of [false, true]) {
     const file = path.join(OUT_DIR, dark ? 'dark.html' : 'light.html')
-    fs.writeFileSync(file, page(api, payload, dark, icons))
+    fs.writeFileSync(file, page(api, payload, dark, icons, extras))
     console.log((dark ? 'dark ' : 'light') + ' -> ' + path.relative(ROOT, file))
   }
   fs.writeFileSync(path.join(OUT_DIR, 'cards.html'), api.cardsHtml(payload))

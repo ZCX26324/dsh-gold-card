@@ -23,6 +23,8 @@ jobs:
           for f in lib/*.cjs assets/panel.js test/*.cjs tools/*.cjs; do node --check "$f"; done
       - name: Host 路由 / index 注入（mock ctx，离线）
         run: node test/apply-smoke.cjs
+      - name: 走势 / 要闻解析单测（离线）
+        run: node test/market-parse.cjs
       - name: 面板 DOM 渲染（DOM stub，离线）
         run: node test/panel-dom.cjs
       - name: 上金所分时解析单测（离线）

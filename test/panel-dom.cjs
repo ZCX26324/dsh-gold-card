@@ -268,6 +268,14 @@ const win = {
   getComputedStyle() { return { flexGrow: '0' } },
 }
 
+// localStorage 桩：与真实浏览器一样是「有则读写、无则异常」的同步接口
+const lsData = new Map()
+win.localStorage = {
+  getItem(key) { return lsData.has(String(key)) ? lsData.get(String(key)) : null },
+  setItem(key, value) { lsData.set(String(key), String(value)) },
+  removeItem(key) { lsData.delete(String(key)) },
+}
+
 function setIntervalStub(fn, ms) {
   intervalSeq += 1
   intervals.set(intervalSeq, { fn, ms })
@@ -358,6 +366,66 @@ function mockPayload() {
   }
 }
 
+/** 右侧扩展列：走势（本周/本月两个区间一次给全）+ 要闻 3 条 */
+function mockExtras() {
+  const week = {
+    label: '本周',
+    points: [
+      { date: '11-02', close: 836.08 },
+      { date: '11-03', close: 840.01 },
+      { date: '11-04', close: 863.79 },
+      { date: '11-05', close: 884.09 },
+      { date: '11-06', close: 868.57 },
+    ],
+    change: { value: 32.49, pct: 3.89 },
+    fromDate: '2026-11-02',
+    toDate: '2026-11-06',
+    note: null,
+  }
+  const month = {
+    label: '本月',
+    points: week.points.concat([{ date: '11-09', close: 874.0 }]),
+    change: { value: 37.92, pct: 4.54 },
+    fromDate: '2026-11-02',
+    toDate: '2026-11-09',
+    note: '最后一根为夜盘所属交易日',
+  }
+  return {
+    build: 'testbuild',
+    fetchedAt: new Date().toISOString(),
+    chart: {
+      ok: true, stale: false, fallback: true, error: null,
+      symbol: 'Au99.99', unit: '元/克', source: '上海黄金交易所日行情',
+      updatedAt: new Date().toISOString(), bars: 6,
+      ranges: { week, month },
+    },
+    news: {
+      ok: true, stale: false, error: null, cached: false,
+      updatedAt: new Date().toISOString(), total: 8,
+      items: [
+        {
+          id: 'n1', title: '2026年10月下旬流通领域重要生产资料市场价格变动情况',
+          url: 'https://www.stats.gov.cn/sj/zxfb/202611/t20261103_1965738.html',
+          source: 'nbs', sourceName: '国家统计局', tier: 3, category: 'data',
+          publishedAt: new Date().toISOString(),
+        },
+        {
+          id: 'n2', title: '中国人民银行决定上调金融机构外汇存款准备金率',
+          url: 'https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/2026110510330636555/index.html',
+          source: 'pbc', sourceName: '中国人民银行', tier: 3, category: 'policy',
+          publishedAt: new Date(Date.now() - 86400000).toISOString(),
+        },
+        {
+          id: 'n3', title: '金价高位震荡，机构提示关注美联储政策路径',
+          url: 'https://finance.sina.com.cn/money/nmetal/hjzx/2026-11-07/doc-test.shtml',
+          source: 'sina', sourceName: '新浪财经', tier: 1, category: 'gold',
+          publishedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+        },
+      ],
+    },
+  }
+}
+
 function makeSandbox() {
   const sandbox = {
     window: win,
@@ -377,6 +445,7 @@ function makeSandbox() {
     navigator: win.navigator,
     location: win.location,
     encodeURIComponent: encodeURIComponent,
+    URL: URL,
     JSON: JSON,
     Math: Math,
     Date: Date,
@@ -405,6 +474,9 @@ const setTimeoutReal = setTimeout
   console.log('=== 前端面板离线渲染自测 ===')
 
   fetchImpl = function (url) {
+    if (url.indexOf('/dsh-gold/api/extras') === 0) {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(mockExtras())) })
+    }
     if (url.indexOf('/dsh-gold/api/quotes') === 0) {
       return Promise.resolve({
         ok: true,
@@ -722,6 +794,87 @@ const setTimeoutReal = setTimeout
     fields: [{ label: '最新价', value: 873.6, hero: true }],
   })
   check(aheadFoot.indexOf('所属交易日 ') >= 0, '脚注把未来日期写成「所属交易日」而不是「源时间」')
+
+  // ---- 9) 右侧扩展列：走势图 + 黄金要闻 ----
+  console.log('右侧扩展列：')
+  // 恢复成按 URL 分流的 fetch（前面几节故意改成了「固定返回某段 payload」）
+  fetchImpl = function (url) {
+    if (url.indexOf('/dsh-gold/api/extras') === 0) {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(mockExtras())) })
+    }
+    if (url.indexOf('/dsh-gold/api/quotes') === 0) {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(mockPayload())) })
+    }
+    return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') })
+  }
+  api.open()
+  await flush()
+  const bodyNode = panel.children.find((c) => String(c.className).indexOf('dsh-gold-panel-body') >= 0)
+  const extrasBtn = panel.querySelector('.dsh-gold-extras-btn')
+  check(!!extrasBtn, '头部有「走势 / 要闻」开关按钮')
+  check(!!extrasBtn && extrasBtn.getAttribute('aria-pressed') === 'false', '默认隐藏：aria-pressed=false')
+  check(bodyNode.innerHTML.indexOf('dsh-gold-col-side') < 0, '默认不渲染右侧列（DOM 与旧版一致）')
+  check(
+    fetched.filter((f) => f.url.indexOf('/dsh-gold/api/extras') >= 0).length === 0,
+    '默认隐藏时不请求 extras 接口'
+  )
+
+  api.toggleExtras()
+  await flush()
+  check(api.state.extrasVisible === true, '点击后进入展开态')
+  const extrasHtml = bodyNode.innerHTML
+  check(extrasHtml.indexOf('dsh-gold-col-side') >= 0, '渲染右侧列容器')
+  check(extrasHtml.indexOf('Au99.99 走势') >= 0, '走势卡标题为「Au99.99 走势」')
+  check(extrasHtml.indexOf('dsh-gold-chart-line') >= 0, '手写 SVG 折线已渲染')
+  check(extrasHtml.indexOf('dsh-gold-chart-area') >= 0, '折线下有面积渐变')
+  check(extrasHtml.indexOf('▲ 3.89%') >= 0, '本周涨跌胶囊（+3.89%）')
+  check(extrasHtml.indexOf('data-dsh-gold-action="range"') >= 0, '图表右下角有切换按钮')
+  check(
+    (extrasHtml.match(/class="dsh-gold-news-item"/g) || []).length === 3,
+    '资讯恰好展示 3 条（实际 ' + (extrasHtml.match(/class="dsh-gold-news-item"/g) || []).length + ' 条）'
+  )
+  check(
+    extrasHtml.indexOf('target="_blank"') >= 0 && extrasHtml.indexOf('rel="noopener noreferrer"') >= 0,
+    '资讯链接可点击且带 target/rel'
+  )
+  check(extrasHtml.indexOf('dsh-gold-news-pill-official') >= 0, '官方来源用官方 pill 标注')
+  check(extrasHtml.indexOf('国家统计局') >= 0 && extrasHtml.indexOf('中国人民银行') >= 0, '官方媒体排在列表里')
+  check(parseInt(panel.style.width, 10) > 384, '展开后面板变宽（两列并排，实际 ' + panel.style.width + '）')
+  check(extrasBtn.getAttribute('aria-pressed') === 'true', '展开后按钮 aria-pressed=true')
+  check(win.localStorage.getItem('dsh-gold-card:extras') === '1', '显隐状态写入 localStorage')
+
+  const extrasCalls = fetched.filter((f) => f.url.indexOf('/dsh-gold/api/extras') >= 0).length
+  check(extrasCalls === 1, '首次展开只请求一次 extras（实际 ' + extrasCalls + ' 次）')
+  api.toggleRange()
+  check(api.state.range === 'month', '切换区间后 state.range=month')
+  const monthHtml = bodyNode.innerHTML
+  check(monthHtml.indexOf('本月') >= 0, '按钮文案变成「本月」')
+  check(monthHtml.indexOf('夜盘所属交易日') >= 0, '本月数据带夜盘口径说明')
+  check(
+    fetched.filter((f) => f.url.indexOf('/dsh-gold/api/extras') >= 0).length === extrasCalls,
+    '切换本周/本月不重新请求（Host 已一次算好两个区间）'
+  )
+
+  // extras 失败：不影响行情卡片，仍展示上次资讯并给轻提示
+  fetchImpl = function (url) {
+    if (url.indexOf('/dsh-gold/api/extras') === 0) return Promise.reject(new Error('模拟资讯接口超时'))
+    if (url.indexOf('/dsh-gold/api/quotes') === 0) {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(mockPayload())) })
+    }
+    return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') })
+  }
+  api.refresh()
+  await flush()
+  const failHtml = bodyNode.innerHTML
+  check(failHtml.indexOf('868.60') >= 0, 'extras 失败不影响行情卡片')
+  check(failHtml.indexOf('资讯更新失败，展示上次内容') >= 0, '资讯失败时保留上次 3 条并轻提示')
+  check(failHtml.indexOf('dsh-gold-news-item') >= 0, '失败后旧资讯仍可点击')
+
+  api.toggleExtras()
+  check(api.state.extrasVisible === false, '再次点击收起右侧列')
+  check(bodyNode.innerHTML.indexOf('dsh-gold-col-side') < 0, '收起后 DOM 恢复单列')
+  check(parseInt(panel.style.width, 10) <= 384, '收起后面板宽度回到单列（实际 ' + panel.style.width + '）')
+  check(win.localStorage.getItem('dsh-gold-card:extras') === '0', '收起状态也写入 localStorage')
 
   // ---- 汇总 ----
   console.log(fail === 0 ? '\n全部通过 ✅' : '\n' + fail + ' 项失败 ❌')

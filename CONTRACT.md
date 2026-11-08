@@ -148,6 +148,74 @@ apply() 里在路由注册完成后，用 `webServer.readResource(new Request('h
   前端按 `level` 找 label（`label` 与 level 必须匹配，smoke 断言）。
 - 溢价带：账户型 `[-5, 10]`、实物金条型 `[15, 25]`；`premium.band.label` 让卡片标明适用哪条带。
 
+## 3.5 走势与要闻接口（GET /dsh-gold/api/extras）
+
+面板右列数据。只在用户点开「走势与要闻」按钮、或手动刷新时拉取；永远 200，两半互不影响。
+
+```jsonc
+{
+  "build": "441fe40cab2a",
+  "fetchedAt": "2026-11-08T08:34:04.000Z",
+  "chart": {
+    "ok": true,
+    "stale": false,
+    "fallback": true,                       // 主源不可用、改用上金所日行情
+    "error": null,
+    "symbol": "Au99.99",
+    "unit": "元/克",
+    "source": "上海黄金交易所日行情",
+    "updatedAt": "2026-11-08T08:34:04.000Z",
+    "bars": 22,
+    "ranges": {
+      "week": {
+        "label": "本周",
+        "points": [ {"date":"11-02","close":836.08}, {"date":"11-06","close":868.57} ],
+        "change": { "value": 32.49, "pct": 3.89 },
+        "fromDate": "2026-11-02", "toDate": "2026-11-06", "note": null
+      },
+      "month": {
+        "label": "本月",
+        "points": [ {"date":"10-09","close":904.48}, {"date":"11-06","close":868.57} ],
+        "change": { "value": -35.91, "pct": -3.97 },
+        "fromDate": "2026-10-09", "toDate": "2026-11-06",
+        "note": "本月交易日不足，显示近 22 个交易日"
+      }
+    }
+  },
+  "news": {
+    "ok": true,
+    "stale": false,
+    "error": null,
+    "updatedAt": "2026-11-08T08:34:04.000Z",
+    "items": [
+      {
+        "id": "5f2c9a1b7d30",
+        "title": "中国人民银行决定上调金融机构外汇存款准备金率",
+        "url": "https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/2026110510330636555/index.html",
+        "source": "pbc", "sourceName": "中国人民银行",
+        "tier": 3, "category": "policy",
+        "publishedAt": "2026-11-05T09:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+规则：
+
+- **chart**：主源东方财富 `118.AU9999` 日 K；请求失败时用上金所日行情逐日兜底（`fallback:true`，
+  仍是真实收盘价，`stale:false`、`error:null`）；只有回退「本进程旧缓存」才 `stale:true`。
+  两源都失败 → `ok:false`、`ranges:null`，前端显示「走势暂不可用」。
+  `week` 锚定最后一根 K 所在自然周；`month` 锚定所在自然月，**少于 8 个交易日时退回近 22 个交易日**
+  （否则月初的「本月」和「本周」完全一样）。最后一根是夜盘所属交易日时，`note` 会补一句说明。
+- **news**：官方 `tier=3`（央行/统计局/上金所/美联储），媒体 `tier=1`（新浪财经）；
+  排序 = tier 降序 → 话题权重（美联储/利率 40、通胀/CPI 30、黄金 25、美元美债/储备 20）→ 时间；
+  只取前 3 条，同一标题去重。外链只放行 http(s)。
+- **日更**：按北京时间每天抓一次，缓存 `$DSH_HOME/dsh-gold-news.json`（原子写、最多 60 条）。
+  当天没有新条目 → 返回上一次的 3 条，`stale:true`、`error:"今日暂无新增资讯"`；
+  抓取失败 → 保留旧内容并带 `stale/error`；从来没有内容才 `ok:false` → 前端「资讯暂不可用」。
+- **解耦**：extras 失败不能影响行情区；前端只给右列轻提示，行情卡片保持原样。
+
 ## 4. 前端面板（assets/panel.js / panel.css，Teammate B 独占）
 
 - 挂载：**左侧面板导航 `<nav>` 内部、紧跟「自动化任务」行之后、「更多」之前**，
@@ -156,6 +224,8 @@ apply() 里在路由注册完成后，用 `webServer.readResource(new Request('h
   不要硬编码 `mP3x-q_`/`wtg9ga_` 这类哈希类名；插入的是 nav 的额外子节点，ensure() 负责补回原位。
   点击入口展开/收起贴边面板（面板标题同为「黄金实时价格」）。
 - 只通过 `GET /dsh-gold/api/quotes` 取数，不要自己抓行情。
+- 右列（走势 + 要闻）由头部第三个按钮控制显隐，默认隐藏；状态存 `localStorage['dsh-gold-card:extras']`，
+  读不到按隐藏处理。打开/手动刷新时才请求 `/dsh-gold/api/extras`；切换显隐、切换本周/本月只重渲染，不重复请求。
 - 打开即拉一次；手动「刷新」按钮；15 分钟自动刷新（`document.hidden` 时暂停，重新可见立即刷新）。
 - 四卡片数据一次返回，前端一次渲染即可（并行拉取在 Host 层已用 Promise.allSettled）。
 - 样式必须跟 DSH 现有 UI 一致：优先用 DSH 的 CSS 变量（见 client-ui-theme / layout 的 `--ds*` / `--dsw-*`）；
@@ -165,11 +235,14 @@ apply() 里在路由注册完成后，用 `webServer.readResource(new Request('h
 
 ## 5. 测试
 
-- `npm test` = `apply-smoke && panel-dom && sge-parse && smoke`
-  - `test/apply-smoke.cjs`：mock ctx 校验六条路由、index 注入行、进程内 `readResource` 可服务、
+- `npm test` = `apply-smoke && market-parse && panel-dom && sge-parse && smoke`
+  - `test/apply-smoke.cjs`：mock ctx 校验七条路由、index 注入行、进程内 `readResource` 可服务、
     注入表自检（`indexInjection.ours===1`）、dispose 后路由摘除。离线。
+  - `test/market-parse.cjs`：走势 K 线解析（乱序/非法/去重/结构变更）、本周/本月窗口与退化、
+    SGE 兜底语义、五个资讯源解析、排序/去重/7 天截断、日更缓存与回退。离线。
   - `test/panel-dom.cjs`：极小 DOM stub 真正执行 `assets/panel.js`，校验侧边栏入口锚点、四卡片渲染、
-    hero/涨跌胶囊/徽标分级/交易日口径、15 分钟定时器、隐藏暂停、失败保留旧数据、折叠态退化。离线。
+    hero/涨跌胶囊/徽标分级/交易日口径、15 分钟定时器、隐藏暂停、失败保留旧数据、折叠态退化，
+    以及右列显隐（localStorage、宽度 384↔780）、SVG 走势、3 条资讯 target/rel、切区间不重复请求。离线。
   - `test/sge-parse.cjs`：上金所分时序列离线单测（未发生时点的占位值、夜盘/日盘时点收敛、
     周末日盘占位尾段截断）。离线。
   - `test/smoke.cjs`：真实四源连通 + 解析陷阱断言（如意金 ÷100、上金所涨跌幅算得出）

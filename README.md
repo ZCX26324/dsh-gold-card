@@ -1,6 +1,7 @@
 # dsh-gold-card
 
-DSH 黄金实时价格面板插件 —— 在**左侧边栏「自动化任务」正下方**加一行纯文字入口「黄金实时价格」，点开以卡片形式展示四类金价。
+DSH 黄金实时价格面板插件 —— 在**左侧边栏「自动化任务」正下方**加一行纯文字入口「黄金实时价格」，点开以卡片形式展示四类金价；
+面板头部第三个按钮可再展开一列「Au99.99 走势图 + 黄金要闻」，默认隐藏。
 
 - 四个数据源**全部直连官方/权威源**，零第三方依赖（只用 Node 内置 `https`/`zlib`/`crypto`）
 - 全部请求免 Key、免登录、无商业付费 API、无无头浏览器、无代理源
@@ -63,6 +64,22 @@ DSH 黄金实时价格面板插件 —— 在**左侧边栏「自动化任务」
 每张卡片都显示**数据源自带的报价时间戳**（`delaystr` / `[12]+[6]` / `sysdate` / `Tms`），
 不使用本地抓取时刻冒充。
 
+## 右侧：走势图 + 黄金要闻（可选）
+
+面板头部第三个按钮（折线图标）控制一整列的显隐，**默认隐藏**；选择存在
+`localStorage['dsh-gold-card:extras']`，下次打开保持。展开后面板加宽到 780px，窄窗口自动上下堆叠。
+
+- **Au99.99 走势**：真实日收盘价折线（东方财富 `118.AU9999` 日 K，主源不可用时自动改用
+  上金所日行情兜底，仍为交易所真实收盘价）。右下角小按钮在「本周 / 本月」之间切换，
+  切换只重绘、不重新请求。本月不足 8 个交易日时自动显示近 22 个交易日，
+  避免月初「本月」和「本周」长得一模一样。
+- **黄金要闻**：北京时间每天只抓一次，按「官方优先 → 话题权重 → 发布时间」排序取前 3 条。
+  官方源：中国人民银行、国家统计局、上海黄金交易所、美联储（FOMC 声明 / 会议纪要）；
+  媒体源：新浪财经贵金属。每条都带标题、来源和时间，点击新窗口打开原文。
+  当天没有新内容时保留原来的 3 条并标注「今日暂无新增资讯」，不会清空。
+
+> 资讯为原站内容的标题与链接聚合，版权归原站；只作信息参考，不构成投资建议。
+
 ## 安装
 
 ### 方式一：从 GitHub 安装（推荐）
@@ -111,15 +128,16 @@ dsh plugin --profile desktop add link:<本目录绝对路径>
 ## 验证
 
 ```bash
-npm test            # 四段全跑（含真实四源连通）
+npm test            # 五段全跑（含真实四源连通）
 npm run test:apply  # 用 mock ctx 校验路由 / index 注入（离线）
+npm run test:market # 走势 K 线 / 要闻解析与日更缓存单测（离线）
 npm run test:panel  # 用极小 DOM stub 真正跑 panel.js，校验渲染/交互（离线）
 npm run test:parse  # 上金所分时解析单元测试（离线）
 npm run test:sources# 真实四源连通性 + 关键解析断言
 ```
 
-`npm test` 期望输出：离线三段各自 `全部通过 ✅`，四源 `4/4 源成功`。
-离线三段在 CI（`.github/workflows/test.yml`）里随 push / PR 自动跑；四源冒烟需要外网，
+`npm test` 期望输出：离线四段各自 `全部通过 ✅`，四源 `4/4 源成功`。
+离线四段在 CI（`.github/workflows/test.yml`）里随 push / PR 自动跑；四源冒烟需要外网，
 只在本地手动跑。
 
 安装后不打开浏览器也能确认插件活着（路由用 `resource` 注册，可在进程内自检）：
@@ -147,6 +165,7 @@ panel mounted proto=... href=...                              # 页面里 panel.
 | 路由 | 说明 |
 |---|---|
 | `GET /dsh-gold/api/quotes` | 四类金价 JSON（契约见 `CONTRACT.md` 第 3 节） |
+| `GET /dsh-gold/api/extras` | 走势（本周/本月）+ 黄金要闻（契约见 `CONTRACT.md` 第 3.5 节） |
 | `GET /dsh-gold/api/status` | 插件自述：build、路由列表、注入表自检、面板挂载报告 |
 | `GET /dsh-gold/api/mounted` | 面板挂载自报（panel.js 打开时请求一次，写日志） |
 | `GET /dsh-gold/api/diag` | 前端挂载诊断：把真实 DOM 现场（frame/nav/行文案/入口父节点）写进日志 |
@@ -190,18 +209,21 @@ lib/
   gold.cjs     聚合层：60s 缓存、并发去重、过期回退、交叉校验、时效校验、双重反算、变化检测
   sources.cjs  通用请求层（连接/读取分离超时、重定向、gzip、GBK、Cookie jar、错误归一）
                + 工行 / 建行 / 新浪 / gold-api 数据源
-  sge.cjs      上金所三个接口（含昨收 -> 涨跌幅），带 www/apex 域名回退
+  sge.cjs      上金所三个接口（含昨收 -> 涨跌幅）+ 历史日行情回溯（走势兜底），带 www/apex 域名回退
+  market.cjs   走势：东方财富日 K 解析、本周/本月窗口、30 分钟缓存、上金所兜底
+  news.cjs     要闻：5 个官方/媒体源解析、排序去重、日更缓存与回退
 assets/
-  panel.js     前端面板：侧边栏入口 + 贴边面板 + 四卡片（hero/涨跌胶囊/统计网格）+ 15 分钟刷新 + 折叠态退化
+  panel.js     前端面板：侧边栏入口 + 贴边面板 + 四卡片（hero/涨跌胶囊/统计网格）+ 右列走势/要闻 + 15 分钟刷新 + 折叠态退化
   panel.css    面板样式（只吃 DSH 主题变量，亮/暗色自适应、细滚动条）
 test/
   apply-smoke.cjs  mock ctx 校验路由与 index 注入
-  panel-dom.cjs    极小 DOM stub 真正跑 panel.js，校验渲染/交互/降级
+  market-parse.cjs 走势窗口 / 资讯解析 / 排序去重 / 日更缓存单测
+  panel-dom.cjs    极小 DOM stub 真正跑 panel.js，校验渲染/交互/降级/右列显隐
   sge-parse.cjs    上金所分时解析单元测试（占位尾段 / 周末墙钟 / min-max 不一致 / 交易日时间轴）
   smoke.cjs        真实四源连通性 + 解析陷阱断言
 tools/
   asar-probe.cjs   读 app.asar 的排查工具（list / grep / cat），维护时查 DSH 内部 API 用
-  preview.cjs      离线 UI 预览：vm 跑 panel.js + panel.css 生成同构 HTML，支持 --live 抓真实行情
+  preview.cjs      离线 UI 预览：vm 跑 panel.js + panel.css 生成同构 HTML（含右列走势/要闻 mock），支持 --live 抓真实数据
   market-index.cjs 生成 / 校验插件市场索引（用官方 @deepseek-ai/dsh-plugin-market-index 校验）
 market/
   index.json       插件市场索引（DSH 索引格式 1），在「发现 → 索引源」里添加即可安装

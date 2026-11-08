@@ -1,7 +1,7 @@
 {
   "name": "dsh-gold-card",
-  "version": "1.7.0",
-  "description": "DSH 实时金价面板插件：左侧边栏「黄金实时价格」入口，卡片展示上金所 Au99.99、国际金价 XAU/USD、工商银行积存金/如意金、建设银行积存金的实时报价、涨跌幅、溢价与交叉校验。",
+  "version": "1.8.0",
+  "description": "DSH 实时金价面板插件：左侧边栏「黄金实时价格」入口，卡片展示上金所 Au99.99、国际金价 XAU/USD、工商银行积存金/如意金、建设银行积存金的实时报价、涨跌幅、溢价与交叉校验；可选展开右侧走势图与每日黄金要闻。",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -32,8 +32,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/apply-smoke.cjs && node test/panel-dom.cjs && node test/sge-parse.cjs && node test/smoke.cjs",
+    "test": "node test/apply-smoke.cjs && node test/market-parse.cjs && node test/panel-dom.cjs && node test/sge-parse.cjs && node test/smoke.cjs",
     "test:apply": "node test/apply-smoke.cjs",
+    "test:market": "node test/market-parse.cjs",
     "test:panel": "node test/panel-dom.cjs",
     "test:parse": "node test/sge-parse.cjs",
     "test:sources": "node test/smoke.cjs"

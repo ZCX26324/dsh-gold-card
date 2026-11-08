@@ -31,8 +31,9 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.6.0'
+  var VERSION = '3.7.0'
   var API = '/dsh-gold/api/quotes'
+  var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
   var DIAG_API = '/dsh-gold/api/diag'
   var PANEL_ID = 'dsh-gold-card-root'
@@ -43,9 +44,12 @@
   var MIN_REFRESH_MS = 15000
   var MAX_REFRESH_MS = 60 * 60 * 1000
   var FETCH_TIMEOUT_MS = 20000
+  var EXTRAS_TIMEOUT_MS = 25000
   var HEALTH_MS = 4000
   var SIDEBAR_MIN_WIDE = 120 // < 该宽度视为折叠轨道
   var SIDEBAR_MIN_VISIBLE = 8 // < 该宽度视为侧边栏不可见
+  /** 右侧扩展列（走势图 + 资讯）的显隐持久化 key，读者可自行清除 */
+  var EXTRAS_KEY = 'dsh-gold-card:extras'
 
   // 入口文案：与侧边栏原生面板行（插件 / 自动化任务 / 更多）一样的纯文字风格
   var ENTRY_LABEL = '黄金实时价格'
@@ -82,6 +86,13 @@
     '<path d="M4.6 4.6 11.4 11.4M11.4 4.6 4.6 11.4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>' +
     '</svg>'
 
+  // 走势 + 要闻开关（柱状/折线小图标）
+  var ICON_EXTRAS =
+    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+    '<path d="M2.6 11.7 6 8.1l2.4 2.1 4.9-5.3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M10.6 4.9h2.7v2.7" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>'
+
   // ---------------------------------------------------------------------------
   // 状态
   // ---------------------------------------------------------------------------
@@ -106,6 +117,12 @@
     health: null,
     lastLoadAt: 0,
     diagHidden: false,
+    // 右侧扩展列（走势图 + 资讯）
+    extrasVisible: false,
+    extrasLoading: false,
+    extras: { status: 'idle', data: null, error: null, at: 0 },
+    range: 'week', // week | month
+    extrasToken: 0,
   }
 
   // ---------------------------------------------------------------------------
@@ -572,13 +589,21 @@
   }
 
   function bodyHtmlFor() {
+    var main
     if (!state.payload) {
-      if (state.loading) return skeletonHtml()
-      if (state.error) return '<div class="dsh-gold-empty">行情服务暂时不可用</div>'
-      return '<div class="dsh-gold-empty">加载中…</div>'
+      if (state.loading) main = skeletonHtml()
+      else if (state.error) main = '<div class="dsh-gold-empty">行情服务暂时不可用</div>'
+      else main = '<div class="dsh-gold-empty">加载中…</div>'
+    } else {
+      main = cardsHtml(state.payload) || '<div class="dsh-gold-empty">暂无行情数据</div>'
     }
-    var html = cardsHtml(state.payload)
-    return html || '<div class="dsh-gold-empty">暂无行情数据</div>'
+    var side = state.extrasVisible ? sideHtml() : ''
+    return (
+      '<div class="dsh-gold-layout' + (side ? ' dsh-gold-layout-wide' : '') + '">' +
+      '<div class="dsh-gold-col-main">' + main + '</div>' +
+      side +
+      '</div>'
+    )
   }
 
   /** 侧边栏摘要：Au99.99 最新价 + 涨跌幅。 */
@@ -600,6 +625,230 @@
     }
     if (out.price === null && isNum(payload.baseAu9999)) out.price = payload.baseAu9999
     return out
+  }
+
+  // ---------------------------------------------------------------------------
+  // 右侧扩展列：走势图 + 黄金要闻
+  //
+  // 两个模块共用头部一个开关（默认隐藏）；显隐存 localStorage。
+  // 走势与资讯都来自 Host 的 /dsh-gold/api/extras，前端只负责渲染，
+  // 切换本周/本月不重新请求（Host 一次把两个区间都算好）。
+  // ---------------------------------------------------------------------------
+
+  function safeUrl(url) {
+    try {
+      var u = new URL(String(url))
+      if (u.protocol === 'http:' || u.protocol === 'https:') return u.toString()
+    } catch (err) { /* 非法 URL 直接丢弃 */ }
+    return ''
+  }
+
+  function readExtrasPref() {
+    try {
+      if (!window.localStorage) return false
+      return window.localStorage.getItem(EXTRAS_KEY) === '1'
+    } catch (err) {
+      return false // 隐私模式 / 禁用存储：默认隐藏，仅本次会话有效
+    }
+  }
+
+  function writeExtrasPref(on) {
+    try {
+      if (window.localStorage) window.localStorage.setItem(EXTRAS_KEY, on ? '1' : '0')
+    } catch (err) { /* 写不进去也不影响当前会话 */ }
+  }
+
+  /** 资讯时间：今天/昨天/MM-DD */
+  function newsDateText(publishedAt, now) {
+    var d = parseLooseDate(publishedAt)
+    if (!d) return ''
+    var ref = now instanceof Date ? now : new Date()
+    var day = 24 * 3600 * 1000
+    var startOfRef = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime()
+    var startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+    var diff = Math.round((startOfRef - startOfDay) / day)
+    if (diff === 0) return '今天'
+    if (diff === 1) return '昨天'
+    return pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+  }
+
+  function changePillHtml(change) {
+    if (!change || !isNum(change.pct)) return ''
+    var tone = change.pct > 0 ? 'up' : change.pct < 0 ? 'down' : ''
+    var arrow = change.pct > 0 ? '▲ ' : change.pct < 0 ? '▼ ' : ''
+    return (
+      '<span class="dsh-gold-change ' + (tone ? 'dsh-gold-' + tone : 'dsh-gold-flat') + '" title="' +
+      esc(fmtPct(change.pct)) + '">' + arrow + Math.abs(change.pct).toFixed(2) + '%</span>'
+    )
+  }
+
+  /** 320×132 的手写 SVG 折线图（不引第三方图表库，避免 CDN/依赖） */
+  function chartSvg(rangeData) {
+    var pts = rangeData && rangeData.points ? rangeData.points : []
+    if (!pts.length) return ''
+    var W = 320
+    var H = 132
+    var padL = 8
+    var padR = 8
+    var padT = 12
+    var padB = 22
+    var plotW = W - padL - padR
+    var plotH = H - padT - padB
+    var values = []
+    var i
+    for (i = 0; i < pts.length; i += 1) if (isNum(pts[i].close)) values.push(pts[i].close)
+    if (!values.length) return ''
+    var min = Math.min.apply(null, values)
+    var max = Math.max.apply(null, values)
+    if (min === max) {
+      min -= 0.5
+      max += 0.5
+    }
+    var span = max - min
+    function px(index) {
+      if (pts.length === 1) return padL + plotW / 2
+      return padL + (plotW * index) / (pts.length - 1)
+    }
+    function py(value) {
+      return padT + plotH * ((max - value) / span)
+    }
+    var line = ''
+    for (i = 0; i < pts.length; i += 1) {
+      line += (i ? ' L' : 'M') + px(i).toFixed(1) + ' ' + py(pts[i].close).toFixed(1)
+    }
+    var area =
+      line +
+      ' L' + px(pts.length - 1).toFixed(1) + ' ' + (padT + plotH).toFixed(1) +
+      ' L' + px(0).toFixed(1) + ' ' + (padT + plotH).toFixed(1) + ' Z'
+
+    var grid = ''
+    for (i = 0; i <= 2; i += 1) {
+      var gy = (padT + (plotH * i) / 2).toFixed(1)
+      grid +=
+        '<line class="dsh-gold-chart-grid" x1="' + padL + '" y1="' + gy +
+        '" x2="' + (W - padR) + '" y2="' + gy + '"/>'
+    }
+
+    var last = pts[pts.length - 1]
+    var lastX = px(pts.length - 1)
+    var lastY = py(last.close)
+    var labelAnchor = lastX > W - 62 ? 'end' : 'start'
+    var labelX = labelAnchor === 'end' ? lastX - 5 : lastX + 5
+    var labelY = Math.max(13, Math.min(H - 8, lastY - 7))
+
+    var svg =
+      '<svg class="dsh-gold-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Au99.99 ' +
+      esc(rangeData.label || '') + '走势">' +
+      '<defs><linearGradient id="dsh-gold-chart-grad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" class="dsh-gold-chart-stop-a"/>' +
+      '<stop offset="1" class="dsh-gold-chart-stop-b"/>' +
+      '</linearGradient></defs>' +
+      grid +
+      '<path class="dsh-gold-chart-area" d="' + area + '"/>' +
+      '<path class="dsh-gold-chart-line" d="' + line + '"/>' +
+      '<circle class="dsh-gold-chart-dot" cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="2.6"/>' +
+      '<text class="dsh-gold-chart-price" x="' + labelX.toFixed(1) + '" y="' + labelY.toFixed(1) +
+      '" text-anchor="' + labelAnchor + '">' + esc(fmtNum(last.close)) + '</text>' +
+      '<text class="dsh-gold-chart-axis" x="' + padL + '" y="' + (H - 4) + '">' +
+      esc(String(pts[0].date || '')) + '</text>' +
+      '<text class="dsh-gold-chart-axis" x="' + (W - padR) + '" y="' + (H - 4) + '" text-anchor="end">' +
+      esc(String(last.date || '')) + '</text>' +
+      '</svg>'
+    return svg
+  }
+
+  function rangeButtonHtml() {
+    var next = state.range === 'week' ? '本月' : '本周'
+    return (
+      '<button type="button" class="dsh-gold-range-btn" data-dsh-gold-action="range" ' +
+      'aria-label="切换到' + next + '走势" title="切换到' + next + '走势">' +
+      esc(state.range === 'week' ? '本周' : '本月') +
+      '<span class="dsh-gold-range-ico" aria-hidden="true">⇄</span></button>'
+    )
+  }
+
+  function chartCardHtml(extras) {
+    var chart = extras && extras.data ? extras.data.chart : null
+    var rangeData = chart && chart.ranges ? chart.ranges[state.range] : null
+    var html = '<div class="dsh-gold-side-card dsh-gold-chart-card">'
+    html += '<div class="dsh-gold-side-head">'
+    html += '<span class="dsh-gold-side-title">Au99.99 走势</span>'
+    if (rangeData && rangeData.change) html += changePillHtml(rangeData.change)
+    html += '</div>'
+
+    var unavailable = extras && extras.status === 'error' && !chart
+    if (unavailable || (chart && chart.ok === false)) {
+      html += '<div class="dsh-gold-side-empty">走势暂不可用</div>'
+    } else if (!chart) {
+      html += '<div class="dsh-gold-chart-skeleton" aria-hidden="true"></div>'
+    } else if (!rangeData || !rangeData.points || !rangeData.points.length) {
+      html += '<div class="dsh-gold-side-empty">暂无走势数据</div>'
+    } else {
+      html += '<div class="dsh-gold-chart-wrap">' + chartSvg(rangeData) + '</div>'
+      if (rangeData.note) {
+        html += '<div class="dsh-gold-side-note">' + esc(rangeData.note) + '</div>'
+      }
+    }
+
+    var src = '东方财富'
+    if (chart && chart.fallback) src = '上金所日行情'
+    if (chart && chart.stale) src += ' · 缓存'
+    html += '<div class="dsh-gold-chart-foot">'
+    html += '<span class="dsh-gold-side-src">' + esc(src) + '</span>'
+    html += rangeButtonHtml()
+    html += '</div>'
+    return html + '</div>'
+  }
+
+  function newsItemHtml(item, index) {
+    var url = safeUrl(item && item.url)
+    if (!url) return ''
+    var tier = item.tier >= 3 ? 'official' : 'media'
+    var time = newsDateText(item.publishedAt, new Date())
+    return (
+      '<a class="dsh-gold-news-item" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' +
+      '<span class="dsh-gold-news-idx">' + (index + 1) + '</span>' +
+      '<span class="dsh-gold-news-main">' +
+      '<span class="dsh-gold-news-title">' + esc(item.title) + '</span>' +
+      '<span class="dsh-gold-news-meta">' +
+      '<span class="dsh-gold-news-pill dsh-gold-news-pill-' + tier + '">' + esc(item.sourceName || '') + '</span>' +
+      (time ? '<span class="dsh-gold-news-time">' + esc(time) + '</span>' : '') +
+      '</span></span></a>'
+    )
+  }
+
+  function newsCardHtml(extras) {
+    var news = extras && extras.data ? extras.data.news : null
+    var items = news && news.items ? news.items : []
+    var html = '<div class="dsh-gold-side-card dsh-gold-news-card">'
+    html += '<div class="dsh-gold-side-head">'
+    html += '<span class="dsh-gold-side-title">黄金要闻</span>'
+    if (items.length) html += '<span class="dsh-gold-side-meta">每天更新</span>'
+    html += '</div>'
+
+    if (!items.length) {
+      html += '<div class="dsh-gold-side-empty">' +
+        (extras && extras.status === 'error' ? '资讯暂不可用' : '资讯加载中…') + '</div>'
+    } else {
+      html += '<div class="dsh-gold-news-list">'
+      for (var i = 0; i < items.length && i < 3; i += 1) html += newsItemHtml(items[i], i)
+      html += '</div>'
+      if (news && (news.stale || news.error || (extras && extras.status === 'error'))) {
+        html += '<div class="dsh-gold-side-note">资讯更新失败，展示上次内容</div>'
+      }
+    }
+
+    html += '<div class="dsh-gold-news-foot">官方来源优先 · 每天更新一次</div>'
+    return html + '</div>'
+  }
+
+  function sideHtml() {
+    return (
+      '<div class="dsh-gold-col-side" aria-label="走势与要闻">' +
+      chartCardHtml(state.extras) +
+      newsCardHtml(state.extras) +
+      '</div>'
+    )
   }
 
   // ---------------------------------------------------------------------------
@@ -1100,6 +1349,7 @@
     setAttr(root, 'aria-label', ENTRY_LABEL)
     setAttr(root, 'aria-modal', 'false')
     setAttr(root, 'data-open', '0')
+    setAttr(root, 'data-extras', state.extrasVisible ? '1' : '0')
 
     var head = mk('div', 'dsh-gold-panel-head')
     var titleWrap = mk('div', 'dsh-gold-panel-title')
@@ -1110,6 +1360,13 @@
     titleWrap.appendChild(mk('span', 'dsh-gold-panel-title-text', ENTRY_LABEL))
 
     var actions = mk('div', 'dsh-gold-panel-actions')
+    var extras = mk('button', 'dsh-gold-iconbtn dsh-gold-extras-btn')
+    extras.type = 'button'
+    setAttr(extras, 'data-dsh-gold-action', 'extras')
+    setAttr(extras, 'aria-pressed', state.extrasVisible ? 'true' : 'false')
+    setAttr(extras, 'title', state.extrasVisible ? '隐藏走势与要闻' : '显示走势与要闻')
+    setAttr(extras, 'aria-label', '显示或隐藏走势与要闻')
+    extras.innerHTML = ICON_EXTRAS
     var refresh = mk('button', 'dsh-gold-iconbtn')
     refresh.type = 'button'
     setAttr(refresh, 'data-dsh-gold-action', 'refresh')
@@ -1123,6 +1380,7 @@
     setAttr(close, 'title', '关闭')
     setAttr(close, 'aria-label', '关闭面板')
     close.innerHTML = ICON_CLOSE
+    actions.appendChild(extras)
     actions.appendChild(refresh)
     actions.appendChild(close)
 
@@ -1159,6 +1417,8 @@
       var action = node.getAttribute('data-dsh-gold-action')
       if (action === 'close') closePanel()
       else if (action === 'refresh' || action === 'retry') load({ manual: true })
+      else if (action === 'extras') toggleExtras()
+      else if (action === 'range') toggleRange()
     })
 
     refs.panel = {
@@ -1170,6 +1430,7 @@
       footLeft: footLeft,
       footRight: footRight,
       refresh: refresh,
+      extrasBtn: extras,
     }
     if (document.body) document.body.appendChild(root)
     return root
@@ -1238,6 +1499,11 @@
       panel.refresh.disabled = !!state.loading
     } catch (err) { /* 忽略 */ }
 
+    setAttr(panel.root, 'data-extras', state.extrasVisible ? '1' : '0')
+    if (panel.extrasBtn) {
+      setAttr(panel.extrasBtn, 'aria-pressed', state.extrasVisible ? 'true' : 'false')
+    }
+
     var base = state.payload && isNum(state.payload.baseAu9999) ? fmtNum(state.payload.baseAu9999) : '—'
     setText(panel.footLeft, 'Au99.99 基准 ' + base + ' 元/克')
     setText(panel.footRight, '每 ' + refreshLabel(state.refreshMs) + '自动刷新')
@@ -1284,8 +1550,12 @@
       if (railRect) left = Math.round(railRect.right + 8)
     }
 
-    var width = Math.round(Math.min(384, Math.max(300, vw - left - 24)))
-    if (vw - left - 24 < 300) width = Math.max(260, vw - left - 16)
+    // 打开右侧扩展列时面板变宽（两列并排），否则保持原来的单列宽度
+    var useExtras = !!state.extrasVisible
+    var maxW = useExtras ? 780 : 384
+    var minW = useExtras ? 320 : 300
+    var width = Math.round(Math.min(maxW, Math.max(minW, vw - left - 24)))
+    if (vw - left - 24 < minW) width = Math.max(260, vw - left - 16)
     left = Math.max(0, Math.min(left, vw - width))
 
     style.left = left + 'px'
@@ -1315,6 +1585,7 @@
     positionPanel()
     updateDom()
     load({ reason: 'open' })
+    if (state.extrasVisible) requestExtras()
   }
 
   function closePanel() {
@@ -1392,6 +1663,118 @@
     })
   }
 
+  /**
+   * 取「走势 + 要闻」。与行情完全解耦：
+   * - 失败只写 state.extras.error，不动行情卡片；
+   * - 只在显隐打开、手动刷新时抓，切换本周/本月不重新请求。
+   */
+  function requestExtras() {
+    if (!state.extrasVisible) return Promise.resolve()
+    if (typeof fetch !== 'function') return Promise.resolve()
+    if (state.extrasLoading) return Promise.resolve()
+
+    state.extrasLoading = true
+    var token = ++state.extrasToken
+    state.extras = {
+      status: state.extras.data ? 'refreshing' : 'loading',
+      data: state.extras.data,
+      error: null,
+      at: state.extras.at,
+    }
+    updatePanel()
+
+    var controller = null
+    if (typeof AbortController === 'function') {
+      try {
+        controller = new AbortController()
+      } catch (err) {
+        controller = null
+      }
+    }
+    var init = { cache: 'no-store', credentials: 'same-origin' }
+    if (controller) init.signal = controller.signal
+    var timer = null
+    try {
+      timer = setTimeout(function () {
+        if (controller) {
+          try {
+            controller.abort()
+          } catch (err) { /* 忽略 */ }
+        }
+      }, EXTRAS_TIMEOUT_MS)
+    } catch (err) {
+      timer = null
+    }
+
+    function settle() {
+      if (timer) clearTimeout(timer)
+      timer = null
+      state.extrasLoading = false
+    }
+
+    return fetch(EXTRAS_API, init)
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var data = null
+          try {
+            data = JSON.parse(text)
+          } catch (err) {
+            data = null
+          }
+          if (!res.ok) {
+            throw new Error(data && data.error ? String(data.error) : '扩展接口返回 HTTP ' + res.status)
+          }
+          if (!data) throw new Error('扩展接口返回的不是 JSON')
+          return data
+        })
+      })
+      .then(
+        function (data) {
+          settle()
+          if (token !== state.extrasToken) return
+          state.extras = { status: 'ok', data: data, error: null, at: Date.now() }
+          updatePanel()
+        },
+        function (err) {
+          settle()
+          if (token !== state.extrasToken) return
+          state.extras = {
+            status: 'error',
+            data: state.extras.data, // 失败保留上次内容
+            error: String(err && err.message ? err.message : err),
+            at: Date.now(),
+          }
+          updatePanel()
+        }
+      )
+  }
+
+  function setExtrasVisible(on) {
+    state.extrasVisible = !!on
+    writeExtrasPref(state.extrasVisible)
+    var panel = refs.panel
+    if (panel) {
+      setAttr(panel.root, 'data-extras', state.extrasVisible ? '1' : '0')
+      if (panel.extrasBtn) {
+        setAttr(panel.extrasBtn, 'aria-pressed', state.extrasVisible ? 'true' : 'false')
+        setAttr(panel.extrasBtn, 'title', state.extrasVisible ? '隐藏走势与要闻' : '显示走势与要闻')
+      }
+    }
+    updateDom()
+    positionPanel()
+    if (state.extrasVisible) requestExtras()
+  }
+
+  function toggleExtras() {
+    setExtrasVisible(!state.extrasVisible)
+  }
+
+  /** 本周 ⇄ 本月：数据已在 Host 一次算好，这里只改本地状态重渲染。 */
+  function toggleRange() {
+    state.range = state.range === 'week' ? 'month' : 'week'
+    updatePanel()
+  }
+
   function applyQuotes(data) {
     if (!data || typeof data !== 'object') {
       state.error = '行情接口返回空数据'
@@ -1433,6 +1816,8 @@
       state.loading = false
       updateDom()
       restartTimer(false)
+      // 手动刷新连右侧一起刷；自动轮询只刷行情（资讯每天更新、走势 Host 缓存 30 分钟）
+      if (opts.manual && state.extrasVisible) requestExtras()
       if (opts.manual) {
         try {
           console.log('[dsh-gold-card] 手动刷新完成' + (state.error ? '（失败：' + state.error + '）' : ''))
@@ -1609,6 +1994,8 @@
       return
     }
     state.booted = true
+    // 用户上次是否展开了「走势 / 要闻」列（存 localStorage）
+    state.extrasVisible = readExtrasPref()
 
     try {
       if (!refs.panel) buildPanelMount()
@@ -1693,6 +2080,16 @@
     bodyHtmlFor: bodyHtmlFor,
     summaryOf: summaryOf,
     okCount: okCount,
+    // 右侧扩展列
+    chartSvg: chartSvg,
+    chartCardHtml: chartCardHtml,
+    newsCardHtml: newsCardHtml,
+    newsItemHtml: newsItemHtml,
+    sideHtml: sideHtml,
+    rangeButtonHtml: rangeButtonHtml,
+    changePillHtml: changePillHtml,
+    newsDateText: newsDateText,
+    safeUrl: safeUrl,
     // 布局/交互（自测可直接调）
     detectSidebar: detectSidebar,
     ensure: ensure,
@@ -1700,6 +2097,9 @@
     close: closePanel,
     toggle: togglePanel,
     refresh: function () { load({ manual: true }) },
+    toggleExtras: toggleExtras,
+    setExtrasVisible: setExtrasVisible,
+    toggleRange: toggleRange,
   }
 
   window.__dshGoldCardPanel = publicApi

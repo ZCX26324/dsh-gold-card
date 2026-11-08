@@ -9,7 +9,8 @@
  *   'webserver/index-inject' 事件 -> 传入 table，插件往 table.push 注入行
  *
  * 断言：
- *   1. 五条路由全部注册（panel.js / panel.css / api/quotes / api/status / api/mounted）
+ *   1. 七条路由全部注册（panel.js / panel.css / api/quotes / api/extras /
+ *      api/status / api/mounted / api/diag）
  *   2. index-inject 行是 script/body，引用 panel.js 与 panel.css，并带重试逻辑
  *   3. 静态资源在进程内可服务（readResource 返回 200 且字节数正常）
  *   4. API 路由返回 JSON（quotes 只验证形状，不联网）
@@ -84,6 +85,7 @@ const need = [
   '/dsh-gold/panel.js',
   '/dsh-gold/panel.css',
   '/dsh-gold/api/quotes',
+  '/dsh-gold/api/extras',
   '/dsh-gold/api/status',
   '/dsh-gold/api/mounted',
   '/dsh-gold/api/diag',
@@ -134,7 +136,7 @@ if (typeof listener === 'function') {
   let statusJson = null
   try { statusJson = JSON.parse(statusBody) } catch (err) { /* 下面报错 */ }
   check(!!statusJson && statusJson.plugin === 'dsh-gold-card', '/api/status 返回插件自述')
-  check(!!statusJson && Array.isArray(statusJson.routes) && statusJson.routes.length === 6, '/api/status 报告 6 条路由')
+  check(!!statusJson && Array.isArray(statusJson.routes) && statusJson.routes.length === 7, '/api/status 报告 7 条路由')
   check(
     !!statusJson && statusJson.indexInjection && statusJson.indexInjection.ours === 1,
     '/api/status 证明自举行已在注入表里（indexInjection.ours=1）'

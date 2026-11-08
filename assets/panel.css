@@ -849,6 +849,304 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * 5.5 右侧扩展列：走势图 + 黄金要闻（头部按钮控制显隐，默认隐藏）
+ * ------------------------------------------------------------------------- */
+
+.dsh-gold-layout {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.dsh-gold-col-main {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dsh-gold-col-side {
+  display: flex;
+  flex: 1 1 340px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  position: sticky;
+  top: 0;
+}
+
+.dsh-gold-side-card {
+  padding: 11px 13px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+}
+
+.dsh-gold-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dsh-gold-side-title {
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 17px;
+}
+
+.dsh-gold-side-meta {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10px;
+}
+
+/* ---- 走势图 ---- */
+
+.dsh-gold-chart-wrap {
+  margin: 0 -2px;
+}
+
+.dsh-gold-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.dsh-gold-chart-grid {
+  stroke: var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.06));
+  stroke-width: 1;
+}
+
+.dsh-gold-chart-area {
+  fill: url(#dsh-gold-chart-grad);
+}
+
+.dsh-gold-chart-stop-a {
+  stop-color: #d4a017;
+  stop-opacity: 0.22;
+}
+
+.dsh-gold-chart-stop-b {
+  stop-color: #d4a017;
+  stop-opacity: 0;
+}
+
+.dsh-gold-chart-line {
+  fill: none;
+  stroke: #c99a1a;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.dsh-gold-chart-dot {
+  fill: #c99a1a;
+}
+
+.dsh-gold-chart-price {
+  fill: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-chart-axis {
+  fill: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-chart-skeleton {
+  height: 132px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-skeleton, rgba(0, 0, 0, 0.04));
+  animation: dsh-gold-pulse 1.4s ease-in-out infinite;
+}
+
+.dsh-gold-chart-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dsh-gold-side-src {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 右下角「本周 ⇄ / 本月 ⇄」小按钮 */
+.dsh-gold-range-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dsh-gold-range-btn:hover {
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-primary, #1f2329);
+}
+
+.dsh-gold-range-btn:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-focus, rgba(0, 96, 255, 0.5));
+  outline-offset: 1px;
+}
+
+.dsh-gold-range-ico {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.dsh-gold-side-note {
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10px;
+  line-height: 14px;
+  word-break: break-word;
+}
+
+.dsh-gold-side-empty {
+  padding: 26px 4px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* ---- 资讯列表 ---- */
+
+.dsh-gold-news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dsh-gold-news-item {
+  display: flex;
+  gap: 7px;
+  margin: 0 -6px;
+  padding: 7px 6px;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dsh-gold-news-item:hover {
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.04));
+}
+
+.dsh-gold-news-idx {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-news-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dsh-gold-news-title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 12px;
+  line-height: 17px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dsh-gold-news-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dsh-gold-news-pill {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+/* 官方来源（央行/统计局/上金所/美联储）用金色 pill，媒体用中性灰 */
+.dsh-gold-news-pill-official {
+  background: rgba(212, 160, 23, 0.14);
+  color: #8a5a00;
+}
+
+.dsh-gold-news-pill-media {
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+}
+
+.dsh-gold-news-time {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-news-foot {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  line-height: 13px;
+}
+
+/* 头部开关：展开时金色，和内容呼应 */
+#dsh-gold-card-root[data-extras="1"] .dsh-gold-iconbtn[data-dsh-gold-action="extras"] {
+  color: #c99a1a;
+}
+
+/* 窄面板（两列放不下）自动堆叠为上下布局 */
+@media (max-width: 720px) {
+  .dsh-gold-layout {
+    flex-wrap: wrap;
+  }
+
+  .dsh-gold-col-side {
+    flex-basis: 100%;
+    position: static;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * 6. 动效（尊重 prefers-reduced-motion）
  * ------------------------------------------------------------------------- */
 
@@ -874,7 +1172,8 @@
 @media (prefers-reduced-motion: reduce) {
   #dsh-gold-card-root[data-open="1"],
   .dsh-gold-iconbtn[data-busy="1"] > svg,
-  .dsh-gold-skeleton-row {
+  .dsh-gold-skeleton-row,
+  .dsh-gold-chart-skeleton {
     animation: none;
   }
 }
