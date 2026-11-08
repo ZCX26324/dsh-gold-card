@@ -898,6 +898,21 @@ const setTimeoutReal = setTimeout
   check(parseInt(panel.style.width, 10) <= 384, '收起后面板宽度回到单列（实际 ' + panel.style.width + '）')
   check(win.localStorage.getItem('dsh-gold-card:extras') === '0', '收起状态也写入 localStorage')
 
+  // ---- 10) 顶部原生标题栏避让（Windows titleBarOverlay 会吃掉右上角鼠标事件） ----
+  console.log('顶部标题栏避让：')
+  check(api.titlebarInset() === 0, '普通浏览器环境不需要下移')
+  check(parseInt(panel.style.top, 10) === 8, '面板默认 top=8px')
+  sandbox.navigator.windowControlsOverlay = {
+    visible: true,
+    getTitlebarAreaRect: () => ({ x: 0, y: 0, width: 900, height: 40 }),
+  }
+  check(api.titlebarInset() === 40, '读取 windowControlsOverlay 的标题栏高度（40px）')
+  api.open()
+  check(parseInt(panel.style.top, 10) === 48, '面板整体下移到标题栏下方（top=48px）')
+  delete sandbox.navigator.windowControlsOverlay
+  api.open()
+  check(parseInt(panel.style.top, 10) === 8, '没有标题栏覆盖时恢复 top=8px')
+
   // ---- 汇总 ----
   console.log(fail === 0 ? '\n全部通过 ✅' : '\n' + fail + ' 项失败 ❌')
   process.exit(fail === 0 ? 0 : 1)

@@ -31,7 +31,7 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.7.1'
+  var VERSION = '3.7.2'
   var API = '/dsh-gold/api/quotes'
   var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
@@ -1479,6 +1479,7 @@
       footRight: footRight,
       refresh: refresh,
       extrasBtn: extras,
+      closeBtn: close,
     }
     if (document.body) document.body.appendChild(root)
     return root
@@ -1569,6 +1570,30 @@
     updatePanel()
   }
 
+  /**
+   * Windows 桌面版窗口用的是 titleBarOverlay：原生的最小化/最大化/关闭按钮浮在页面
+   * 顶部约 40px 的条带里。面板贴右上角摆放时，这段原生区域会吃掉鼠标事件——
+   * 图标上半截点不动、往下挪一点才能点到。这里量出标题栏高度，把面板整体下移。
+   */
+  function titlebarInset() {
+    var inset = 0
+    try {
+      var wco = typeof navigator !== 'undefined' ? navigator.windowControlsOverlay : null
+      if (wco && wco.visible !== false && typeof wco.getTitlebarAreaRect === 'function') {
+        var r = wco.getTitlebarAreaRect()
+        if (r && r.height > 0 && r.height < 120) inset = Math.round(r.height)
+      }
+    } catch (err) { /* 忽略 */ }
+    if (!inset) {
+      try {
+        var ua = String((typeof navigator !== 'undefined' && navigator.userAgent) || '')
+        var proto = String((window.location && window.location.protocol) || '')
+        if (/Windows/i.test(ua) && /^dsh-app:/i.test(proto)) inset = 40
+      } catch (err) { /* 忽略 */ }
+    }
+    return inset
+  }
+
   // 贴左侧边栏右缘展开：宽视口是「贴边竖条」，窄视口退化成居中浮层。
   function positionPanel() {
     var panel = refs.panel
@@ -1577,12 +1602,14 @@
     var style = root.style || {}
     var vw = window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 1024
     var vh = window.innerHeight || 800
+    // 顶部留出原生标题栏（Windows 窗口按钮）的高度，避免按钮被原生层挡住
+    var top = 8 + titlebarInset()
 
     if (vw < 820 || vh < 480) {
       setAttr(root, 'data-sheet', '1')
       style.left = '8px'
       style.right = '8px'
-      style.top = '8px'
+      style.top = top + 'px'
       style.bottom = '8px'
       style.width = 'auto'
       return
@@ -1608,9 +1635,68 @@
 
     style.left = left + 'px'
     style.right = 'auto'
-    style.top = '8px'
+    style.top = top + 'px'
     style.bottom = '8px'
     style.width = width + 'px'
+  }
+
+  /**
+   * 命中测试：三个头部按钮的几何中心/上边缘是否真能点到自己。
+   * 用于排查「看着在按钮上却点不到」这类原生层遮挡问题（结果进诊断日志）。
+   */
+  function hitTargetsReport() {
+    var panel = refs.panel
+    var out = []
+    if (!panel) return out
+    var list = [
+      { name: 'extras', el: panel.extrasBtn },
+      { name: 'refresh', el: panel.refresh },
+      { name: 'close', el: panel.closeBtn },
+    ]
+    for (var i = 0; i < list.length; i += 1) {
+      var btn = list[i].el
+      if (!btn) continue
+      var r = rectOf(btn)
+      if (!r) {
+        out.push({ name: list[i].name, rect: null })
+        continue
+      }
+      var cx = Math.round(r.left + r.width / 2)
+      var cy = Math.round(r.top + r.height / 2)
+      var at = null
+      var atTop = null
+      try {
+        at = document.elementFromPoint(cx, cy)
+      } catch (err) { at = null }
+      try {
+        atTop = document.elementFromPoint(cx, Math.round(r.top + 2))
+      } catch (err) { atTop = null }
+      var owns = function (el) {
+        if (!el) return false
+        if (el === btn) return true
+        try {
+          return !!(btn.contains && btn.contains(el))
+        } catch (err) {
+          return false
+        }
+      }
+      out.push({
+        name: list[i].name,
+        rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+        centerOk: owns(at),
+        centerAt: at ? describeEl(at) : null,
+        topOk: owns(atTop),
+        topAt: atTop ? describeEl(atTop) : null,
+      })
+    }
+    return out
+  }
+
+  var hitReported = false
+  function reportHitTargets() {
+    if (hitReported) return
+    hitReported = true
+    reportDiag('hit-test')
   }
 
   function togglePanel() {
@@ -1634,6 +1720,10 @@
     updateDom()
     load({ reason: 'open' })
     if (state.extrasVisible) requestExtras()
+    // 面板刚挂载时量一次命中区域（诊断用，每个页面生命周期只报一次）
+    try {
+      setTimeout(reportHitTargets, 800)
+    } catch (err) { /* 忽略 */ }
   }
 
   function closePanel() {
@@ -2000,6 +2090,8 @@
         entryNext: next,
         native: entry ? entry.getAttribute('data-native') : null,
         display: entry ? String(entry.style && entry.style.display ? entry.style.display : '') : null,
+        titlebarInset: titlebarInset(),
+        hits: hitTargetsReport(),
         bodyChildren: (function () {
           var out = []
           try {
@@ -2148,6 +2240,8 @@
     toggleExtras: toggleExtras,
     setExtrasVisible: setExtrasVisible,
     toggleRange: toggleRange,
+    titlebarInset: titlebarInset,
+    hitTargetsReport: hitTargetsReport,
   }
 
   window.__dshGoldCardPanel = publicApi
@@ -2155,5 +2249,6 @@
 
   start()
 })()
+
 
 
