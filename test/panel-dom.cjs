@@ -961,6 +961,12 @@ const setTimeoutReal = setTimeout
   check(bodyNode.innerHTML.indexOf('合计') >= 0 && bodyNode.innerHTML.indexOf('15.00 克') >= 0, '有合计行')
   check((bodyNode.innerHTML.match(/class="dsh-gold-pos-item"/g) || []).length === 2, '两笔记录都列出来了')
 
+  // 顺序：持仓汇总/记录在上，录入表单在下
+  const html1 = bodyNode.innerHTML
+  check(html1.indexOf('平均成本') < html1.indexOf('dsh-gold-pos-form'), '汇总在录入表单上方')
+  check(html1.indexOf('dsh-gold-pos-item') < html1.indexOf('dsh-gold-pos-form'), '记录列表也在录入表单上方')
+  check(html1.indexOf('合计') < html1.indexOf('dsh-gold-pos-form'), '合计行在录入表单上方')
+
   const stored = JSON.parse(win.localStorage.getItem('dsh-gold-card:positions') || '[]')
   check(stored.length === 2 && stored[0].channel === 'icbc' && stored[1].channel === 'ccb', '记录写入 localStorage')
   check(api.readPositions().length === 2, '能从 localStorage 读回记录')

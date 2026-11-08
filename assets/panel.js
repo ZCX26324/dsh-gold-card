@@ -31,7 +31,7 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.8.1'
+  var VERSION = '3.8.2'
   var API = '/dsh-gold/api/quotes'
   var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
@@ -1193,6 +1193,10 @@
       '<span class="dsh-gold-side-title">积存金持仓</span>' +
       '<span class="dsh-gold-side-meta">本地记录</span>' +
       '</div>' +
+      (channelsHtml || '<div class="dsh-gold-pos-empty">还没有积存记录，填入克数和成交价后点「记录一笔」</div>') +
+      totalHtml +
+      positionRecordsHtml() +
+      '<div class="dsh-gold-pos-err">' + esc(state.posError || '') + '</div>' +
       '<div class="dsh-gold-pos-form">' +
       '<label class="dsh-gold-pos-field"><span>渠道</span>' +
       '<select id="dsh-gold-pos-channel" data-pos="channel">' + options + '</select></label>' +
@@ -1202,10 +1206,6 @@
       '<input id="dsh-gold-pos-price" data-pos="price" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="' + esc(buyInfo.ok ? fmtNum(buyInfo.price) : '0.00') + '" value="' + esc(prefill) + '"></label>' +
       '<button type="button" class="dsh-gold-pos-add" data-dsh-gold-action="position-add">记录一笔</button>' +
       '</div>' +
-      '<div class="dsh-gold-pos-err">' + esc(state.posError || '') + '</div>' +
-      (channelsHtml || '<div class="dsh-gold-pos-empty">还没有积存记录，填入克数和成交价后点「记录一笔」</div>') +
-      totalHtml +
-      positionRecordsHtml() +
       '<div class="dsh-gold-pos-foot">工行赎回费 0.5% · 建行按赎回价成交（点差已含）· 记录只存在本机</div>' +
       '</section>'
     )
@@ -2646,6 +2646,7 @@
 
   start()
 })()
+
 
 
 

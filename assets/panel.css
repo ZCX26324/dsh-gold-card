@@ -1201,7 +1201,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px 8px;
-  margin-bottom: 6px;
+  margin: 12px 0 0;
 }
 
 .dsh-gold-pos-field {
@@ -1263,6 +1263,7 @@
 }
 
 .dsh-gold-pos-err {
+  margin-top: 6px;
   color: var(--dsw-alias-state-error-primary, #ec1313);
   font-size: 10px;
   line-height: 14px;
@@ -1499,4 +1500,7 @@
     animation: none;
   }
 }
+
+
+
 
