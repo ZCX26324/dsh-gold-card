@@ -63,12 +63,12 @@
       },
       "versions": [
         {
-          "version": "1.9.2",
-          "publishTimestamp": 1794103590,
+          "version": "1.9.3",
+          "publishTimestamp": 1794103997,
           "source": {
             "type": "git",
             "url": "https://github.com/ZCX26324/dsh-gold-card",
-            "commit": "b47a81ae782e6b007d1b7b593b40cfb37b04b726"
+            "commit": "43be68d210face7ef981d8e118cf17b721b7f4db"
           },
           "engines": {
             "dsh": ">=0.2.0"
