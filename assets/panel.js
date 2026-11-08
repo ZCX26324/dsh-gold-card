@@ -31,7 +31,7 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.8.0'
+  var VERSION = '3.8.1'
   var API = '/dsh-gold/api/quotes'
   var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
@@ -1009,6 +1009,30 @@
     return out
   }
 
+  /** 取渠道当前「买入价」用于录入时预填：工行取积存金主动积存价，建行取买入价 */
+  function channelBuyPrice(payload, channel) {
+    if (!payload || !payload.cards) return { ok: false, price: null }
+    var card = payload.cards[channel]
+    if (!card || card.ok === false) return { ok: false, price: null }
+    var field = null
+    if (channel === 'icbc') {
+      var groups = card.groups || []
+      var g = null
+      for (var i = 0; i < groups.length; i += 1) {
+        var title = String((groups[i] && (groups[i].name || groups[i].title)) || '')
+        if (/积存金/.test(title) && !/如意/.test(title)) {
+          g = groups[i]
+          break
+        }
+      }
+      field = pickFieldByLabel(g && g.fields, /主动积存价|积存价/)
+    } else {
+      field = pickFieldByLabel(card.fields, /买入价/)
+    }
+    if (field && isNum(field.value)) return { ok: true, price: Number(field.value) }
+    return { ok: false, price: null }
+  }
+
   function channelStats(records, priceInfo) {
     var grams = 0
     var cost = 0
@@ -1139,8 +1163,8 @@
 
   function positionCardHtml() {
     var draft = state.posDraft || { channel: 'icbc', grams: '', price: '' }
-    var priceInfo = channelRedeem(state.payload, draft.channel)
-    var prefill = draft.price !== '' ? draft.price : priceInfo.ok ? fmtNum(priceInfo.price) : ''
+    var buyInfo = channelBuyPrice(state.payload, draft.channel)
+    var prefill = draft.price !== '' ? draft.price : buyInfo.ok ? fmtNum(buyInfo.price) : ''
     var options = ''
     var ids = positionChannelIds()
     for (var i = 0; i < ids.length; i += 1) {
@@ -1175,7 +1199,7 @@
       '<label class="dsh-gold-pos-field"><span>克数</span>' +
       '<input id="dsh-gold-pos-grams" data-pos="grams" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00" value="' + esc(draft.grams) + '"></label>' +
       '<label class="dsh-gold-pos-field"><span>每克价格</span>' +
-      '<input id="dsh-gold-pos-price" data-pos="price" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="' + esc(priceInfo.ok ? fmtNum(priceInfo.price) : '0.00') + '" value="' + esc(prefill) + '"></label>' +
+      '<input id="dsh-gold-pos-price" data-pos="price" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="' + esc(buyInfo.ok ? fmtNum(buyInfo.price) : '0.00') + '" value="' + esc(prefill) + '"></label>' +
       '<button type="button" class="dsh-gold-pos-add" data-dsh-gold-action="position-add">记录一笔</button>' +
       '</div>' +
       '<div class="dsh-gold-pos-err">' + esc(state.posError || '') + '</div>' +
@@ -1821,7 +1845,7 @@
       if (target.getAttribute('data-pos') !== 'channel') return
       var channel = String(target.value || '')
       if (!POSITION_CHANNELS[channel]) return
-      var info = channelRedeem(state.payload, channel)
+      var info = channelBuyPrice(state.payload, channel)
       state.posDraft.channel = channel
       state.posDraft.price = info.ok ? fmtNum(info.price) : ''
       updatePanel()
@@ -2606,6 +2630,7 @@
     positionCardHtml: positionCardHtml,
     positionSummary: positionsSummary,
     channelRedeem: channelRedeem,
+    channelBuyPrice: channelBuyPrice,
     addPosition: addPosition,
     submitPosition: submitPosition,
     removePosition: removePosition,
@@ -2621,6 +2646,8 @@
 
   start()
 })()
+
+
 
 
 

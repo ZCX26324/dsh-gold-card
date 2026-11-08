@@ -936,6 +936,8 @@ const setTimeoutReal = setTimeout
     '工行渠道取「积存金」分组赎回价（873.61，而不是如意金 869.68）'
   )
   check((api.channelRedeem(mockPayload(), 'ccb') || {}).price === 870.22, '建行渠道取卡片「赎回价」870.22')
+  check((api.channelBuyPrice(mockPayload(), 'icbc') || {}).price === 873.61, '工行买入价预填取「主动积存价」873.61')
+  check((api.channelBuyPrice(mockPayload(), 'ccb') || {}).price === 876.88, '建行买入价预填取「买入价」876.88')
 
   // 工行：赎回金额另收 0.5% 手续费
   api.setPosDraft({ channel: 'icbc', grams: '10', price: '870' })
@@ -966,7 +968,7 @@ const setTimeoutReal = setTimeout
   // 改渠道时价格输入框自动回填当前渠道价（模拟 change 事件）
   api.setPosDraft({ channel: 'ccb', grams: '', price: '' })
   api.toggleRange()
-  check(bodyNode.innerHTML.indexOf('value="870.22"') >= 0, '价格输入框默认回填当前渠道赎回价')
+  check(bodyNode.innerHTML.indexOf('value="876.88"') >= 0, '价格输入框默认回填当前渠道买入价（建行 876.88，不是赎回价）')
 
   // 删除一笔
   api.removePosition(r1.id)
@@ -992,3 +994,4 @@ const setTimeoutReal = setTimeout
   console.error('自测异常：', err && err.stack ? err.stack : err)
   process.exit(1)
 })
+
