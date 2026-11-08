@@ -1300,9 +1300,9 @@
 }
 
 .dsh-gold-pos-ch-grams {
-  color: var(--dsw-alias-label-secondary, #4e5969);
-  font-size: 11.5px;
-  font-weight: 500;
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+  font-size: 12.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1500,6 +1500,7 @@
     animation: none;
   }
 }
+
 
 
 

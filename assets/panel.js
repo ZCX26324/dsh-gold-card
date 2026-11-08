@@ -31,7 +31,7 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.8.2'
+  var VERSION = '3.8.3'
   var API = '/dsh-gold/api/quotes'
   var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
@@ -2646,6 +2646,7 @@
 
   start()
 })()
+
 
 
 
