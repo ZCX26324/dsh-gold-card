@@ -53,7 +53,10 @@ function buildIndex() {
   const url = repoUrl()
   const commit = currentCommit()
   // publishTimestamp：登记的提交的提交时间（Unix 秒，整数）
-  const ts = Number(sh(['show', '-s', '--format=%ct', commit]))
+  // --timestamp 用于应急推送场景：远端 API 提交在本地 git 里还不存在，无法用 git show 取时间
+  const tsArg = argOf('--timestamp', '')
+  const ts = tsArg ? Number(tsArg) : Number(sh(['show', '-s', '--format=%ct', commit]))
+  if (!Number.isFinite(ts) || ts <= 0) throw new Error('publishTimestamp 无效：' + ts)
   return {
     format: 1,
     title: { en: 'DSH Gold Card', zh: 'DSH 实时金价面板' },
