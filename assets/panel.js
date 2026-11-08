@@ -31,7 +31,7 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.7.2'
+  var VERSION = '3.8.0'
   var API = '/dsh-gold/api/quotes'
   var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
@@ -123,6 +123,10 @@
     extras: { status: 'idle', data: null, error: null, at: 0 },
     range: 'week', // week | month
     extrasToken: 0,
+    // 积存金持仓（本地记录）
+    positions: [],
+    posDraft: { channel: 'icbc', grams: '', price: '' },
+    posError: null,
   }
 
   // ---------------------------------------------------------------------------
@@ -892,11 +896,339 @@
 
   function sideHtml() {
     return (
-      '<div class="dsh-gold-col-side" aria-label="走势与要闻">' +
+      '<div class="dsh-gold-col-side" aria-label="走势、要闻与持仓">' +
       chartCardHtml(state.extras) +
       newsCardHtml(state.extras) +
+      positionCardHtml() +
       '</div>'
     )
+  }
+
+  // ---------------------------------------------------------------------------
+  // 积存金持仓（右侧列底部）：记录每笔积存，按渠道规则估算全部赎回盈亏
+  // ---------------------------------------------------------------------------
+
+  var POSITIONS_KEY = 'dsh-gold-card:positions'
+  /**
+   * 渠道交易规则：
+   * - 工商银行积存金：赎回按赎回价成交，另收赎回金额 0.5% 手续费；
+   *   主动积存手续费在活动期内为 0（买入成本按用户录入的每克价格算）。
+   * - 建设银行积存金：买卖点差体现在买入价/赎回价里，赎回不再另收手续费。
+   */
+  var POSITION_CHANNELS = {
+    icbc: { name: '工商银行', fee: 0.005, feeText: '赎回费 0.5%' },
+    ccb: { name: '建设银行', fee: 0, feeText: '点差已含' },
+  }
+  var POSITION_MAX_RECORDS = 200
+
+  function positionChannelIds() {
+    return ['icbc', 'ccb']
+  }
+
+  /** 本地记录：只接受合法渠道、正数克重/价格，坏数据直接跳过（不因脏数据把面板弄挂） */
+  function readPositions() {
+    var out = []
+    try {
+      var raw = window.localStorage ? window.localStorage.getItem(POSITIONS_KEY) : null
+      if (!raw) return out
+      var list = JSON.parse(raw)
+      if (!Array.isArray(list)) return out
+      for (var i = 0; i < list.length && i < POSITION_MAX_RECORDS; i += 1) {
+        var it = list[i]
+        if (!it || !POSITION_CHANNELS[it.channel]) continue
+        var grams = Number(it.grams)
+        var price = Number(it.price)
+        if (!(grams > 0) || !(price > 0)) continue
+        out.push({
+          id: String(it.id || 'p' + i),
+          channel: it.channel,
+          grams: grams,
+          price: price,
+          at: Number(it.at) || 0,
+        })
+      }
+    } catch (err) {
+      return []
+    }
+    return out
+  }
+
+  function writePositions() {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(POSITIONS_KEY, JSON.stringify(state.positions || []))
+      }
+    } catch (err) {
+      // 本地存储不可用：只在当前页面会话内有效
+    }
+  }
+
+  function pickFieldByLabel(fields, re) {
+    if (!fields || !fields.length) return null
+    for (var i = 0; i < fields.length; i += 1) {
+      var f = fields[i]
+      if (f && re.test(String(f.label || ''))) return f
+    }
+    return null
+  }
+
+  /** 取渠道当前赎回价：工行取「积存金」分组（不是如意金），建行取卡片「赎回价」 */
+  function channelRedeem(payload, channel) {
+    var def = POSITION_CHANNELS[channel]
+    var out = { ok: false, price: null, fee: def ? def.fee : 0, name: def ? def.name : channel }
+    if (!payload || !payload.cards || !def) return out
+    var card = payload.cards[channel]
+    if (!card || card.ok === false) return out
+    var field = null
+    if (channel === 'icbc') {
+      var groups = card.groups || []
+      var g = null
+      for (var i = 0; i < groups.length; i += 1) {
+        var title = String((groups[i] && (groups[i].name || groups[i].title)) || '')
+        if (/积存金/.test(title) && !/如意/.test(title)) {
+          g = groups[i]
+          break
+        }
+      }
+      if (!g) {
+        for (var j = 0; j < groups.length; j += 1) {
+          if (groups[j]) {
+            g = groups[j]
+            break
+          }
+        }
+      }
+      field = pickFieldByLabel(g && g.fields, /赎回价/)
+    } else {
+      field = pickFieldByLabel(card.fields, /赎回价/)
+    }
+    if (field && isNum(field.value)) {
+      out.ok = true
+      out.price = Number(field.value)
+    }
+    return out
+  }
+
+  function channelStats(records, priceInfo) {
+    var grams = 0
+    var cost = 0
+    for (var i = 0; i < records.length; i += 1) {
+      grams += records[i].grams
+      cost += records[i].grams * records[i].price
+    }
+    var avgCost = grams > 0 ? cost / grams : null
+    var redeem = priceInfo && priceInfo.ok && isNum(priceInfo.price) ? Number(priceInfo.price) : null
+    var fee = priceInfo && isNum(priceInfo.fee) ? Number(priceInfo.fee) : 0
+    var netUnit = redeem !== null ? redeem * (1 - fee) : null
+    var netValue = netUnit !== null ? grams * netUnit : null
+    var pnl = netValue !== null ? netValue - cost : null
+    var pnlPct = pnl !== null && cost > 0 ? (pnl / cost) * 100 : null
+    return {
+      grams: grams,
+      cost: cost,
+      avgCost: avgCost,
+      redeem: redeem,
+      fee: fee,
+      netUnit: netUnit,
+      netValue: netValue,
+      pnl: pnl,
+      pnlPct: pnlPct,
+    }
+  }
+
+  /** 汇总：分渠道 + 合计。任一有持仓的渠道拿不到赎回价时，不硬凑总盈亏。 */
+  function positionsSummary() {
+    var records = state.positions || []
+    var channels = {}
+    var ids = positionChannelIds()
+    for (var i = 0; i < ids.length; i += 1) {
+      var id = ids[i]
+      var list = []
+      for (var j = 0; j < records.length; j += 1) if (records[j].channel === id) list.push(records[j])
+      var priceInfo = channelRedeem(state.payload, id)
+      channels[id] = { priceInfo: priceInfo, stats: channelStats(list, priceInfo), count: list.length }
+    }
+    var totalGrams = 0
+    var totalCost = 0
+    var totalNet = 0
+    var missing = false
+    for (var k = 0; k < ids.length; k += 1) {
+      var ch = channels[ids[k]]
+      totalGrams += ch.stats.grams
+      totalCost += ch.stats.cost
+      if (ch.stats.grams <= 0) continue
+      if (ch.stats.netValue === null) missing = true
+      else totalNet += ch.stats.netValue
+    }
+    var total = {
+      grams: totalGrams,
+      cost: totalCost,
+      avgCost: totalGrams > 0 ? totalCost / totalGrams : null,
+      netValue: missing ? null : totalNet,
+      pnl: missing ? null : totalNet - totalCost,
+      pnlPct: missing || totalCost <= 0 ? null : ((totalNet - totalCost) / totalCost) * 100,
+    }
+    return { channels: channels, total: total, missing: missing }
+  }
+
+  function pnlText(value, pct) {
+    var cls = value > 0 ? ' dsh-gold-up' : value < 0 ? ' dsh-gold-down' : ''
+    var num = (value > 0 ? '+' : '') + fmtNum(value)
+    var pctText = pct === null ? '' : '（' + fmtPct(pct) + '）'
+    return '<span class="dsh-gold-pos-pnl' + cls + '">' + num + pctText + '</span>'
+  }
+
+  function positionChannelHtml(id) {
+    var def = POSITION_CHANNELS[id]
+    var ch = positionsSummary().channels[id]
+    var stats = ch.stats
+    if (!ch.count) return ''
+    var priceText = stats.redeem === null ? '赎回价暂不可用' : fmtNum(stats.redeem) + ' 元/克'
+    var feeLine =
+      stats.redeem === null
+        ? '等待行情刷新'
+        : '净赎回价 ' + fmtNum(stats.netUnit) + ' 元/克 · ' + def.feeText
+    var pnl =
+      stats.pnl === null
+        ? '<span class="dsh-gold-pos-muted">盈亏待行情</span>'
+        : pnlText(stats.pnl, stats.pnlPct)
+    return (
+      '<div class="dsh-gold-pos-ch">' +
+      '<div class="dsh-gold-pos-ch-head">' +
+      '<span class="dsh-gold-pos-ch-name">' + esc(def.name) + '</span>' +
+      '<span class="dsh-gold-pos-ch-grams">' + fmtNum(stats.grams) + ' 克</span>' +
+      '</div>' +
+      '<div class="dsh-gold-pos-grid">' +
+      '<div class="dsh-gold-pos-cell"><span class="dsh-gold-pos-label">平均成本</span>' +
+      '<span class="dsh-gold-pos-value">' + fmtNum(stats.avgCost) + '</span></div>' +
+      '<div class="dsh-gold-pos-cell"><span class="dsh-gold-pos-label">当前赎回价</span>' +
+      '<span class="dsh-gold-pos-value">' + priceText + '</span></div>' +
+      '<div class="dsh-gold-pos-cell"><span class="dsh-gold-pos-label">预计盈亏</span>' +
+      '<span class="dsh-gold-pos-value">' + pnl + '</span></div>' +
+      '</div>' +
+      '<div class="dsh-gold-pos-fee">' + feeLine + '</div>' +
+      '</div>'
+    )
+  }
+
+  function positionRecordsHtml() {
+    var list = (state.positions || []).slice().sort(function (a, b) {
+      return b.at - a.at
+    })
+    if (!list.length) return ''
+    var html = '<ul class="dsh-gold-pos-list">'
+    for (var i = 0; i < list.length && i < 12; i += 1) {
+      var it = list[i]
+      var def = POSITION_CHANNELS[it.channel]
+      var date = ''
+      try {
+        var d = new Date(it.at || Date.now())
+        date = pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+      } catch (err) { date = '' }
+      html +=
+        '<li class="dsh-gold-pos-item">' +
+        '<span class="dsh-gold-pos-item-date">' + esc(date) + '</span>' +
+        '<span class="dsh-gold-pos-item-main">' + esc(def ? def.name : it.channel) + ' · ' + fmtNum(it.grams) + ' 克 @ ' + fmtNum(it.price) + '</span>' +
+        '<button type="button" class="dsh-gold-pos-del" data-dsh-gold-action="position-remove" data-id="' + esc(it.id) + '" title="删除这笔记录" aria-label="删除这笔记录">×</button>' +
+        '</li>'
+    }
+    html += '</ul>'
+    if (list.length > 12) html += '<div class="dsh-gold-pos-more">仅显示最近 12 笔，共 ' + list.length + ' 笔</div>'
+    return html
+  }
+
+  function positionCardHtml() {
+    var draft = state.posDraft || { channel: 'icbc', grams: '', price: '' }
+    var priceInfo = channelRedeem(state.payload, draft.channel)
+    var prefill = draft.price !== '' ? draft.price : priceInfo.ok ? fmtNum(priceInfo.price) : ''
+    var options = ''
+    var ids = positionChannelIds()
+    for (var i = 0; i < ids.length; i += 1) {
+      options +=
+        '<option value="' + ids[i] + '"' + (ids[i] === draft.channel ? ' selected' : '') + '>' +
+        esc(POSITION_CHANNELS[ids[i]].name) +
+        '</option>'
+    }
+    var summary = positionsSummary()
+    var channelsHtml = positionChannelHtml('icbc') + positionChannelHtml('ccb')
+    var total = summary.total
+    var totalHtml = ''
+    if (total.grams > 0) {
+      totalHtml =
+        '<div class="dsh-gold-pos-total">' +
+        '<span class="dsh-gold-pos-total-label">合计</span>' +
+        '<span class="dsh-gold-pos-total-grams">' + fmtNum(total.grams) + ' 克 · 成本 ' + fmtNum(total.avgCost) + ' 元/克</span>' +
+        '<span class="dsh-gold-pos-total-pnl">' +
+        (total.pnl === null ? '<span class="dsh-gold-pos-muted">盈亏待行情</span>' : pnlText(total.pnl, total.pnlPct)) +
+        '</span>' +
+        '</div>'
+    }
+    return (
+      '<section class="dsh-gold-side-card dsh-gold-pos" aria-label="积存金持仓">' +
+      '<div class="dsh-gold-side-head">' +
+      '<span class="dsh-gold-side-title">积存金持仓</span>' +
+      '<span class="dsh-gold-side-meta">本地记录</span>' +
+      '</div>' +
+      '<div class="dsh-gold-pos-form">' +
+      '<label class="dsh-gold-pos-field"><span>渠道</span>' +
+      '<select id="dsh-gold-pos-channel" data-pos="channel">' + options + '</select></label>' +
+      '<label class="dsh-gold-pos-field"><span>克数</span>' +
+      '<input id="dsh-gold-pos-grams" data-pos="grams" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00" value="' + esc(draft.grams) + '"></label>' +
+      '<label class="dsh-gold-pos-field"><span>每克价格</span>' +
+      '<input id="dsh-gold-pos-price" data-pos="price" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="' + esc(priceInfo.ok ? fmtNum(priceInfo.price) : '0.00') + '" value="' + esc(prefill) + '"></label>' +
+      '<button type="button" class="dsh-gold-pos-add" data-dsh-gold-action="position-add">记录一笔</button>' +
+      '</div>' +
+      '<div class="dsh-gold-pos-err">' + esc(state.posError || '') + '</div>' +
+      (channelsHtml || '<div class="dsh-gold-pos-empty">还没有积存记录，填入克数和成交价后点「记录一笔」</div>') +
+      totalHtml +
+      positionRecordsHtml() +
+      '<div class="dsh-gold-pos-foot">工行赎回费 0.5% · 建行按赎回价成交（点差已含）· 记录只存在本机</div>' +
+      '</section>'
+    )
+  }
+
+  function addPosition(input) {
+    var data = input || {}
+    var channel = POSITION_CHANNELS[data.channel] ? data.channel : 'icbc'
+    var grams = Number(data.grams)
+    var price = Number(data.price)
+    if (!(grams > 0)) {
+      state.posError = '克数需要大于 0'
+      return null
+    }
+    if (!(price > 0)) {
+      state.posError = '每克价格需要大于 0'
+      return null
+    }
+    state.posError = null
+    var rec = {
+      id: 'p' + Date.now() + Math.random().toString(36).slice(2, 6),
+      channel: channel,
+      grams: Math.round(grams * 100) / 100,
+      price: Math.round(price * 100) / 100,
+      at: Date.now(),
+    }
+    state.positions = (state.positions || []).concat([rec])
+    writePositions()
+    state.posDraft = { channel: channel, grams: '', price: '' }
+    return rec
+  }
+
+  function submitPosition() {
+    var draft = state.posDraft || {}
+    var rec = addPosition({ channel: draft.channel, grams: draft.grams, price: draft.price })
+    updatePanel()
+    return rec
+  }
+
+  function removePosition(id) {
+    var list = state.positions || []
+    var next = []
+    for (var i = 0; i < list.length; i += 1) if (list[i].id !== id) next.push(list[i])
+    if (next.length === list.length) return false
+    state.positions = next
+    writePositions()
+    return true
   }
 
   // ---------------------------------------------------------------------------
@@ -1467,6 +1799,32 @@
       else if (action === 'refresh' || action === 'retry') load({ manual: true })
       else if (action === 'extras') toggleExtras()
       else if (action === 'range') toggleRange()
+      else if (action === 'position-add') submitPosition()
+      else if (action === 'position-remove') {
+        if (removePosition(node.getAttribute('data-id') || '')) updatePanel()
+      }
+    })
+
+    // 持仓表单：输入只记到 state，不重绘（保住光标）；刷新重绘时再从 state 回填
+    root.addEventListener('input', function (event) {
+      var target = event.target
+      if (!target || typeof target.getAttribute !== 'function') return
+      var key = target.getAttribute('data-pos')
+      if (!key) return
+      if (!state.posDraft) state.posDraft = { channel: 'icbc', grams: '', price: '' }
+      state.posDraft[key] = target.value === undefined || target.value === null ? '' : String(target.value)
+    })
+
+    root.addEventListener('change', function (event) {
+      var target = event.target
+      if (!target || typeof target.getAttribute !== 'function') return
+      if (target.getAttribute('data-pos') !== 'channel') return
+      var channel = String(target.value || '')
+      if (!POSITION_CHANNELS[channel]) return
+      var info = channelRedeem(state.payload, channel)
+      state.posDraft.channel = channel
+      state.posDraft.price = info.ok ? fmtNum(info.price) : ''
+      updatePanel()
     })
 
     refs.panel = {
@@ -2136,6 +2494,8 @@
     state.booted = true
     // 用户上次是否展开了「走势 / 要闻」列（存 localStorage）
     state.extrasVisible = readExtrasPref()
+    // 积存金持仓记录（本地）
+    state.positions = readPositions()
 
     try {
       if (!refs.panel) buildPanelMount()
@@ -2242,6 +2602,18 @@
     toggleRange: toggleRange,
     titlebarInset: titlebarInset,
     hitTargetsReport: hitTargetsReport,
+    // 积存金持仓
+    positionCardHtml: positionCardHtml,
+    positionSummary: positionsSummary,
+    channelRedeem: channelRedeem,
+    addPosition: addPosition,
+    submitPosition: submitPosition,
+    removePosition: removePosition,
+    readPositions: readPositions,
+    setPosDraft: function (patch) {
+      state.posDraft = Object.assign({ channel: 'icbc', grams: '', price: '' }, state.posDraft || {}, patch || {})
+      return state.posDraft
+    },
   }
 
   window.__dshGoldCardPanel = publicApi
@@ -2249,6 +2621,8 @@
 
   start()
 })()
+
+
 
 
 

@@ -1195,6 +1195,262 @@
   line-height: 13px;
 }
 
+/* ---- 积存金持仓 ---- */
+
+.dsh-gold-pos-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.dsh-gold-pos-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  line-height: 12px;
+}
+
+/* 渠道下拉独占一行，克数 / 每克价格并排，按钮再占一行 */
+.dsh-gold-pos-field:first-child {
+  grid-column: 1 / -1;
+}
+
+.dsh-gold-pos-field select,
+.dsh-gold-pos-field input {
+  width: 100%;
+  height: 26px;
+  padding: 0 7px;
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.02));
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.dsh-gold-pos-field select:focus-visible,
+.dsh-gold-pos-field input:focus-visible {
+  border-color: #c99a1a;
+}
+
+.dsh-gold-pos-add {
+  grid-column: 1 / -1;
+  height: 28px;
+  margin-top: 1px;
+  border: 0;
+  border-radius: 8px;
+  background: #c99a1a;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dsh-gold-pos-add:hover {
+  background: #b98a12;
+}
+
+.dsh-gold-pos-add:active {
+  background: #a97d0e;
+}
+
+.dsh-gold-pos-err {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.dsh-gold-pos-err:empty {
+  display: none;
+}
+
+.dsh-gold-pos-empty {
+  padding: 2px 0 4px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10.5px;
+  line-height: 15px;
+}
+
+.dsh-gold-pos-ch {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+}
+
+.dsh-gold-pos-ch-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dsh-gold-pos-ch-name {
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.dsh-gold-pos-ch-grams {
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.dsh-gold-pos-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dsh-gold-pos-label {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  line-height: 12px;
+}
+
+.dsh-gold-pos-value {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-gold-pos-pnl {
+  font-weight: 600;
+}
+
+.dsh-gold-pos-muted {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.dsh-gold-pos-fee {
+  margin-top: 4px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  line-height: 13px;
+}
+
+.dsh-gold-pos-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px dashed var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+}
+
+.dsh-gold-pos-total-label {
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dsh-gold-pos-total-grams {
+  flex: 1;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-gold-pos-total-pnl {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-pos-list {
+  margin: 8px 0 0;
+  padding: 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  list-style: none;
+}
+
+.dsh-gold-pos-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  color: var(--dsw-alias-label-secondary, #4e5969);
+  font-size: 10.5px;
+  line-height: 14px;
+}
+
+.dsh-gold-pos-item-date {
+  flex: none;
+  width: 30px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-pos-item-main {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-gold-pos-del {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 13px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.dsh-gold-pos-del:hover {
+  background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+}
+
+.dsh-gold-pos-more {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+}
+
+.dsh-gold-pos-foot {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  line-height: 13px;
+}
+
 /* 头部开关：展开时金色，和内容呼应 */
 #dsh-gold-card-root[data-extras="1"] .dsh-gold-iconbtn[data-dsh-gold-action="extras"] {
   color: #c99a1a;

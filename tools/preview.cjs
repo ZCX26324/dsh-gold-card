@@ -181,10 +181,14 @@ function panelHtml(api, payload, opts) {
   const metaRight = (payload ? api.okCount(payload) : 0) + '/' + total + ' 源正常'
   const base = payload && typeof payload.baseAu9999 === 'number' ? api.fmtNum(payload.baseAu9999) : '—'
   const extrasState = opts.extras ? { status: 'ok', data: opts.extras, error: null, at: 0 } : null
+  // 持仓卡预览：给几笔示例记录，让截图能展示汇总/盈亏/记录列表
+  if (payload) api.state.payload = payload
+  api.state.positions = opts.positions || []
   const side = extrasState
-    ? '<div class="dsh-gold-col-side" aria-label="走势与要闻">' +
+    ? '<div class="dsh-gold-col-side" aria-label="走势、要闻与持仓">' +
       api.chartCardHtml(extrasState) +
       api.newsCardHtml(extrasState) +
+      api.positionCardHtml() +
       '</div>'
     : ''
   return `
@@ -313,6 +317,15 @@ function themeVars(dark) {
   return dark ? THEME_DARK : THEME_LIGHT
 }
 
+function samplePositions() {
+  const now = Date.now()
+  return [
+    { id: 'p1', channel: 'icbc', grams: 10, price: 870, at: now - 86400000 * 2 },
+    { id: 'p2', channel: 'icbc', grams: 8, price: 845.5, at: now - 86400000 * 9 },
+    { id: 'p3', channel: 'ccb', grams: 5, price: 868, at: now - 3600000 * 5 },
+  ]
+}
+
 function page(api, payload, dark, icons, extras) {
   const css = fs.readFileSync(path.join(ROOT, 'assets', 'panel.css'), 'utf8')
   return `<!doctype html><html lang="zh-CN"${dark ? ' data-dark="1"' : ''}><head>
@@ -321,7 +334,7 @@ function page(api, payload, dark, icons, extras) {
 <style>${themeVars(dark)}${MOCK_CSS}${css}</style>
 </head><body>
 ${MOCK_SIDEBAR}
-${panelHtml(api, payload, Object.assign({ extras: extras }, icons))}
+${panelHtml(api, payload, Object.assign({ extras: extras, positions: samplePositions() }, icons))}
 </body></html>`
 }
 

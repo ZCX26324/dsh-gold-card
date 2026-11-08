@@ -913,6 +913,78 @@ const setTimeoutReal = setTimeout
   api.open()
   check(parseInt(panel.style.top, 10) === 8, '没有标题栏覆盖时恢复 top=8px')
 
+  // ---- 11) 积存金持仓（右侧列底部：本地记录 + 按渠道规则算全部赎回盈亏） ----
+  console.log('积存金持仓：')
+  fetchImpl = function (url) {
+    if (url.indexOf('/dsh-gold/api/extras') === 0) {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(mockExtras())) })
+    }
+    if (url.indexOf('/dsh-gold/api/quotes') === 0) {
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(mockPayload())) })
+    }
+    return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') })
+  }
+  if (!api.state.extrasVisible) api.toggleExtras()
+  api.open()
+  await flush()
+  check(bodyNode.innerHTML.indexOf('积存金持仓') >= 0, '右侧列底部有「积存金持仓」模块')
+  check(bodyNode.innerHTML.indexOf('还没有积存记录') >= 0, '没有记录时给出空状态提示')
+  check(bodyNode.innerHTML.indexOf('data-dsh-gold-action="position-add"') >= 0, '有「记录一笔」按钮')
+
+  check(
+    (api.channelRedeem(mockPayload(), 'icbc') || {}).price === 873.61,
+    '工行渠道取「积存金」分组赎回价（873.61，而不是如意金 869.68）'
+  )
+  check((api.channelRedeem(mockPayload(), 'ccb') || {}).price === 870.22, '建行渠道取卡片「赎回价」870.22')
+
+  // 工行：赎回金额另收 0.5% 手续费
+  api.setPosDraft({ channel: 'icbc', grams: '10', price: '870' })
+  const r1 = api.submitPosition()
+  check(!!r1 && api.state.positions.length === 1, '录入一笔工行积存（10 克 @870）')
+  const sum1 = api.positionSummary()
+  check(Math.abs(sum1.channels.icbc.stats.avgCost - 870) < 1e-9, '平均成本 = 870.00')
+  check(Math.abs(sum1.channels.icbc.stats.netUnit - 869.242) < 0.01, '工行净赎回价已扣 0.5% 手续费（869.24）')
+  check(Math.abs(sum1.total.pnl - -7.58) < 0.02, '工行这笔全部赎回约亏 -7.58 元（实际 ' + sum1.total.pnl.toFixed(2) + '）')
+  check(bodyNode.innerHTML.indexOf('工商银行') >= 0 && bodyNode.innerHTML.indexOf('10.00 克') >= 0, '汇总行显示渠道与克数')
+  check(bodyNode.innerHTML.indexOf('平均成本') >= 0 && bodyNode.innerHTML.indexOf('当前赎回价') >= 0, '汇总包含平均成本与当前赎回价')
+  check(bodyNode.innerHTML.indexOf('dsh-gold-down') >= 0, '亏损用绿色（与行情涨跌配色一致）')
+
+  // 建行：按赎回价成交，不另收手续费
+  api.setPosDraft({ channel: 'ccb', grams: '5', price: '868' })
+  api.submitPosition()
+  const sum2 = api.positionSummary()
+  check(Math.abs(sum2.channels.ccb.stats.pnl - 11.1) < 0.02, '建行这笔全部赎回约赚 +11.10 元')
+  check(Math.abs(sum2.total.grams - 15) < 1e-9, '合计克数 = 15.00')
+  check(Math.abs(sum2.total.pnl - 3.52) < 0.05, '合计盈亏跨渠道汇总（实际 ' + sum2.total.pnl.toFixed(2) + '）')
+  check(bodyNode.innerHTML.indexOf('合计') >= 0 && bodyNode.innerHTML.indexOf('15.00 克') >= 0, '有合计行')
+  check((bodyNode.innerHTML.match(/class="dsh-gold-pos-item"/g) || []).length === 2, '两笔记录都列出来了')
+
+  const stored = JSON.parse(win.localStorage.getItem('dsh-gold-card:positions') || '[]')
+  check(stored.length === 2 && stored[0].channel === 'icbc' && stored[1].channel === 'ccb', '记录写入 localStorage')
+  check(api.readPositions().length === 2, '能从 localStorage 读回记录')
+
+  // 改渠道时价格输入框自动回填当前渠道价（模拟 change 事件）
+  api.setPosDraft({ channel: 'ccb', grams: '', price: '' })
+  api.toggleRange()
+  check(bodyNode.innerHTML.indexOf('value="870.22"') >= 0, '价格输入框默认回填当前渠道赎回价')
+
+  // 删除一笔
+  api.removePosition(r1.id)
+  api.toggleRange()
+  check(api.state.positions.length === 1, '删除后只剩 1 笔')
+  check(bodyNode.innerHTML.indexOf('dsh-gold-pos-ch-name">工商银行') < 0, '删掉工行记录后该渠道汇总消失')
+  check(api.readPositions().length === 1, '删除也同步到 localStorage')
+
+  // 非法输入
+  api.setPosDraft({ channel: 'icbc', grams: '0', price: '870' })
+  const bad = api.submitPosition()
+  check(bad === null && api.state.posError === '克数需要大于 0', '克数为 0 时拒绝录入并提示')
+  check(api.state.positions.length === 1, '非法输入不产生记录')
+
+  // 收起右侧列后持仓模块一起隐藏（属于右侧列的一部分）
+  api.toggleExtras()
+  check(bodyNode.innerHTML.indexOf('积存金持仓') < 0, '收起右侧列后不显示持仓模块')
+
   // ---- 汇总 ----
   console.log(fail === 0 ? '\n全部通过 ✅' : '\n' + fail + ' 项失败 ❌')
   process.exit(fail === 0 ? 0 : 1)
