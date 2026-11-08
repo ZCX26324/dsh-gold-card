@@ -31,7 +31,7 @@
   // 常量
   // ---------------------------------------------------------------------------
 
-  var VERSION = '3.7.0'
+  var VERSION = '3.7.1'
   var API = '/dsh-gold/api/quotes'
   var EXTRAS_API = '/dsh-gold/api/extras'
   var MOUNTED_API = '/dsh-gold/api/mounted'
@@ -736,6 +736,34 @@
     var labelX = labelAnchor === 'end' ? lastX - 5 : lastX + 5
     var labelY = Math.max(13, Math.min(H - 8, lastY - 7))
 
+    // 每天的收盘价都点一个加粗圆点；区间最高/最低用红/绿描边强调
+    var highIdx = -1
+    var lowIdx = -1
+    for (i = 0; i < pts.length; i += 1) {
+      if (rangeData.high && pts[i].date === rangeData.high.date) highIdx = i
+      if (rangeData.low && pts[i].date === rangeData.low.date) lowIdx = i
+    }
+    var dots = ''
+    for (i = 0; i < pts.length; i += 1) {
+      var dotClass = 'dsh-gold-chart-dot'
+      var dotR = 2.4
+      if (i === pts.length - 1) {
+        dotClass += ' dsh-gold-chart-dot-last'
+        dotR = 3.0
+      }
+      if (i === highIdx) {
+        dotClass += ' dsh-gold-chart-dot-high'
+        dotR = 3.4
+      }
+      if (i === lowIdx) {
+        dotClass += ' dsh-gold-chart-dot-low'
+        dotR = 3.4
+      }
+      dots +=
+        '<circle class="' + dotClass + '" cx="' + px(i).toFixed(1) + '" cy="' + py(pts[i].close).toFixed(1) +
+        '" r="' + dotR + '"><title>' + esc(pts[i].date + ' ' + fmtNum(pts[i].close)) + '</title></circle>'
+    }
+
     var svg =
       '<svg class="dsh-gold-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Au99.99 ' +
       esc(rangeData.label || '') + '走势">' +
@@ -746,7 +774,7 @@
       grid +
       '<path class="dsh-gold-chart-area" d="' + area + '"/>' +
       '<path class="dsh-gold-chart-line" d="' + line + '"/>' +
-      '<circle class="dsh-gold-chart-dot" cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="2.6"/>' +
+      dots +
       '<text class="dsh-gold-chart-price" x="' + labelX.toFixed(1) + '" y="' + labelY.toFixed(1) +
       '" text-anchor="' + labelAnchor + '">' + esc(fmtNum(last.close)) + '</text>' +
       '<text class="dsh-gold-chart-axis" x="' + padL + '" y="' + (H - 4) + '">' +
@@ -785,6 +813,26 @@
       html += '<div class="dsh-gold-side-empty">暂无走势数据</div>'
     } else {
       html += '<div class="dsh-gold-chart-wrap">' + chartSvg(rangeData) + '</div>'
+      if (rangeData.high || rangeData.low) {
+        html += '<div class="dsh-gold-chart-extremes">'
+        if (rangeData.high) {
+          html +=
+            '<span class="dsh-gold-extreme dsh-gold-extreme-high">' +
+            '<span class="dsh-gold-extreme-label">最高</span>' +
+            '<span class="dsh-gold-extreme-value">' + esc(fmtNum(rangeData.high.close)) + '</span>' +
+            '<span class="dsh-gold-extreme-date">' + esc(String(rangeData.high.date || '')) + '</span>' +
+            '</span>'
+        }
+        if (rangeData.low) {
+          html +=
+            '<span class="dsh-gold-extreme dsh-gold-extreme-low">' +
+            '<span class="dsh-gold-extreme-label">最低</span>' +
+            '<span class="dsh-gold-extreme-value">' + esc(fmtNum(rangeData.low.close)) + '</span>' +
+            '<span class="dsh-gold-extreme-date">' + esc(String(rangeData.low.date || '')) + '</span>' +
+            '</span>'
+        }
+        html += '</div>'
+      }
       if (rangeData.note) {
         html += '<div class="dsh-gold-side-note">' + esc(rangeData.note) + '</div>'
       }
@@ -2107,3 +2155,5 @@
 
   start()
 })()
+
+

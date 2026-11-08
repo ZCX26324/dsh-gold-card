@@ -104,6 +104,18 @@ console.log('=== 2) 本周 / 本月窗口 ===')
   const weekFallback = market.buildRanges(rows.slice(0, 10), now) // 最后一根 11-06（周五）
   check(weekFallback.week.points.length === 5, '本周交易日不足时退化为近 5 个交易日')
   check(
+    weekFallback.week.high.close === 884.09 && weekFallback.week.high.date === '11-05',
+    '区间最高价与日期（11-05 884.09）'
+  )
+  check(
+    weekFallback.week.low.close === 836.08 && weekFallback.week.low.date === '11-02',
+    '区间最低价与日期（11-02 836.08）'
+  )
+  check(
+    weekFallback.month.high.close === 884.09 && weekFallback.month.low.close === 830,
+    '本月区间同样带最高/最低（退化后含 10-26 的 830）'
+  )
+  check(
     weekFallback.week.change.value === Math.round((868.57 - 836.08) * 100) / 100,
     '本周涨跌额 = 最后一根 - 第一根'
   )

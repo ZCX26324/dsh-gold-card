@@ -947,7 +947,69 @@
 }
 
 .dsh-gold-chart-dot {
+  fill: var(--dsw-alias-bg-layer-1, #ffffff);
+  stroke: #c99a1a;
+  stroke-width: 1.5;
+}
+
+/* 最后一个点实心金色，方便一眼看到「现在」 */
+.dsh-gold-chart-dot-last {
   fill: #c99a1a;
+}
+
+/* 区间最高 / 最低：空心红/绿描边，比普通点大一圈 */
+.dsh-gold-chart-dot-high {
+  stroke: var(--dsw-alias-state-error-primary, #ec1313);
+  stroke-width: 1.6;
+}
+
+.dsh-gold-chart-dot-low {
+  stroke: var(--dsw-alias-state-success-primary, #12a150);
+  stroke-width: 1.6;
+}
+
+/* 图下方：本周/本月最高、最低价格 */
+.dsh-gold-chart-extremes {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 5px;
+  padding: 0 2px;
+}
+
+.dsh-gold-extreme {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.dsh-gold-extreme-label {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+}
+
+.dsh-gold-extreme-value {
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-gold-extreme-high .dsh-gold-extreme-value {
+  color: var(--dsw-alias-state-error-primary, #ec1313);
+}
+
+.dsh-gold-extreme-low .dsh-gold-extreme-value {
+  color: var(--dsw-alias-state-success-primary, #12a150);
+}
+
+.dsh-gold-extreme-date {
+  color: var(--dsw-alias-label-tertiary, #86909c);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dsh-gold-chart-price {
@@ -1177,3 +1239,4 @@
     animation: none;
   }
 }
+

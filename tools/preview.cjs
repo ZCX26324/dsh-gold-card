@@ -53,10 +53,18 @@ function mockExtras() {
     const first = rows[0]
     const last = rows[rows.length - 1]
     const value = Math.round((last[1] - first[1]) * 100) / 100
+    let hi = rows[0]
+    let lo = rows[0]
+    for (const r of rows) {
+      if (r[1] > hi[1]) hi = r
+      if (r[1] < lo[1]) lo = r
+    }
     return {
       label: label,
       points: rows.map((r) => ({ date: r[0].slice(5), close: r[1] })),
       change: { value: value, pct: Math.round((value / first[1]) * 10000) / 100 },
+      high: { date: hi[0].slice(5), close: hi[1] },
+      low: { date: lo[0].slice(5), close: lo[1] },
       fromDate: first[0],
       toDate: last[0],
       note: note,

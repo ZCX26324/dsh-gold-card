@@ -378,6 +378,8 @@ function mockExtras() {
       { date: '11-06', close: 868.57 },
     ],
     change: { value: 32.49, pct: 3.89 },
+    high: { date: '11-05', close: 884.09 },
+    low: { date: '11-02', close: 836.08 },
     fromDate: '2026-11-02',
     toDate: '2026-11-06',
     note: null,
@@ -386,6 +388,8 @@ function mockExtras() {
     label: '本月',
     points: week.points.concat([{ date: '11-09', close: 874.0 }]),
     change: { value: 37.92, pct: 4.54 },
+    high: { date: '11-05', close: 884.09 },
+    low: { date: '11-02', close: 836.08 },
     fromDate: '2026-11-02',
     toDate: '2026-11-09',
     note: '最后一根为夜盘所属交易日',
@@ -827,6 +831,20 @@ const setTimeoutReal = setTimeout
   check(extrasHtml.indexOf('Au99.99 走势') >= 0, '走势卡标题为「Au99.99 走势」')
   check(extrasHtml.indexOf('dsh-gold-chart-line') >= 0, '手写 SVG 折线已渲染')
   check(extrasHtml.indexOf('dsh-gold-chart-area') >= 0, '折线下有面积渐变')
+  check(
+    (extrasHtml.match(/class="dsh-gold-chart-dot/g) || []).length === 5,
+    '每个交易日都画了加粗圆点（实际 ' + (extrasHtml.match(/class="dsh-gold-chart-dot/g) || []).length + ' 个）'
+  )
+  check(extrasHtml.indexOf('dsh-gold-chart-dot-high') >= 0, '最高点用红色描边圆点强调')
+  check(extrasHtml.indexOf('dsh-gold-chart-dot-low') >= 0, '最低点用绿色描边圆点强调')
+  check(
+    extrasHtml.indexOf('最高') >= 0 && extrasHtml.indexOf('884.09') >= 0 && extrasHtml.indexOf('11-05') >= 0,
+    '图下方显示本周最高价与日期'
+  )
+  check(
+    extrasHtml.indexOf('最低') >= 0 && extrasHtml.indexOf('836.08') >= 0 && extrasHtml.indexOf('11-02') >= 0,
+    '图下方显示本周最低价与日期'
+  )
   check(extrasHtml.indexOf('▲ 3.89%') >= 0, '本周涨跌胶囊（+3.89%）')
   check(extrasHtml.indexOf('data-dsh-gold-action="range"') >= 0, '图表右下角有切换按钮')
   check(
@@ -850,6 +868,10 @@ const setTimeoutReal = setTimeout
   const monthHtml = bodyNode.innerHTML
   check(monthHtml.indexOf('本月') >= 0, '按钮文案变成「本月」')
   check(monthHtml.indexOf('夜盘所属交易日') >= 0, '本月数据带夜盘口径说明')
+  check(
+    (monthHtml.match(/class="dsh-gold-chart-dot/g) || []).length === 6,
+    '切换本月后圆点数等于本月点数（实际 ' + (monthHtml.match(/class="dsh-gold-chart-dot/g) || []).length + ' 个）'
+  )
   check(
     fetched.filter((f) => f.url.indexOf('/dsh-gold/api/extras') >= 0).length === extrasCalls,
     '切换本周/本月不重新请求（Host 已一次算好两个区间）'

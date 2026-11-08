@@ -171,12 +171,16 @@ apply() 里在路由注册完成后，用 `webServer.readResource(new Request('h
         "label": "本周",
         "points": [ {"date":"11-02","close":836.08}, {"date":"11-06","close":868.57} ],
         "change": { "value": 32.49, "pct": 3.89 },
+        "high": { "date": "11-05", "close": 884.09 },
+        "low": { "date": "11-02", "close": 836.08 },
         "fromDate": "2026-11-02", "toDate": "2026-11-06", "note": null
       },
       "month": {
         "label": "本月",
         "points": [ {"date":"10-09","close":904.48}, {"date":"11-06","close":868.57} ],
         "change": { "value": -35.91, "pct": -3.97 },
+        "high": { "date": "10-09", "close": 904.48 },
+        "low": { "date": "11-02", "close": 836.08 },
         "fromDate": "2026-10-09", "toDate": "2026-11-06",
         "note": "本月交易日不足，显示近 22 个交易日"
       }
